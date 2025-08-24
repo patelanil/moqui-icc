@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-seed">
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ImportInventoryCounts"
+             description="Import inventory counts"
+             consumeServiceName="co.hotwax.cycleCount.InventoryCountServices.consume#InventoryCountImportCsv"
+             receivePath="${contentRoot}/hotwax/inventory-count/${fileName}_${dateTime}.csv"/>
+
+    <artifactGroups artifactGroupId="ICC_API" description="Directed Inventory Cycle Count API (via root resource)">
+        <artifacts artifactTypeEnumId="AT_REST_PATH" inheritAuthz="Y" artifactName="/inventory-cycle-count"/>
+        <!-- Full permissions for the ADMIN user group -->
+        <authz artifactAuthzId="ICC_API_ADMIN" userGroupId="ADMIN" authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL"/>
+    </artifactGroups>
+
+    <moqui.basic.EnumerationType enumTypeId="CYCLE_COUNT" description="cycle count"/>
+    <moqui.basic.Enumeration enumId="REJ_ITEM_COUNT" description="rejected item cycle count" enumTypeId="CYCLE_COUNT"/>
+
+</entity-facade-xml>

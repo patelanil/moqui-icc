@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-seed">
+    <moqui.basic.EnumerationType enumTypeId="CYCLE_COUNT" description="cycle count"/>
+    <moqui.basic.Enumeration enumId="REJ_ITEM_COUNT" description="rejected item cycle count" enumTypeId="CYCLE_COUNT"/>
+</entity-facade-xml>

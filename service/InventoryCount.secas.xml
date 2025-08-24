@@ -1,0 +1,21 @@
+<secas xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-eca-3.xsd">
+
+    <seca id="CreateInventoryCountImport" service="create#co.hotwax.warehouse.InventoryCountImport" when="post-service" run-on-error="false">
+        <condition><expression>statusId</expression></condition>
+        <actions>
+            <service-call name="create#co.hotwax.warehouse.InvCountImportStatus" in-map="context + [statusDate: ec.user.nowTimestamp]"/>
+        </actions>
+    </seca>
+    <seca id="UpdateInventoryCountImport" service="update#co.hotwax.warehouse.InventoryCountImport" when="post-service" run-on-error="false">
+        <condition><expression>statusChanged</expression></condition>
+        <actions>
+            <service-call name="create#co.hotwax.warehouse.InvCountImportStatus" in-map="context + [statusDate: ec.user.nowTimestamp]"/>
+        </actions>
+    </seca>
+    <seca id="UpdateInventoryCountImportItem" service="update#co.hotwax.warehouse.InventoryCountImportItem" when="post-service" run-on-error="false">
+        <condition><expression>statusChanged</expression></condition>
+        <actions>
+            <service-call name="create#co.hotwax.warehouse.InvCountImportStatus" in-map="context + [statusDate: ec.user.nowTimestamp]"/>
+        </actions>
+    </seca>
+</secas>

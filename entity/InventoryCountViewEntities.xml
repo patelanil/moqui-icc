@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+    <view-entity entity-name="InventoryCountImportView" package="co.hotwax.warehouse">
+        <member-entity entity-alias="ICI" entity-name="co.hotwax.warehouse.InventoryCountImport"/>
+        <member-entity entity-alias="SI" entity-name="moqui.basic.StatusItem" join-from-alias="ICI">
+            <key-map field-name="statusId"/>
+        </member-entity>
+        <member-entity entity-alias="FAC" entity-name="org.apache.ofbiz.product.facility.Facility" join-from-alias="ICI" join-optional="true">
+            <key-map field-name="facilityId"/>
+        </member-entity>
+        <member-entity entity-alias="ICIS" entity-name="co.hotwax.warehouse.InvCountImportStatus" join-from-alias="ICI" join-optional="true">
+            <key-map field-name="inventoryCountImportId"/>
+            <entity-condition>
+                <econdition field-name="importItemSeqId" value=""/>
+                <econdition field-name="statusId" value="INV_COUNT_COMPLETED"/>
+            </entity-condition>
+        </member-entity>
+        <alias-all entity-alias="ICI"/>
+        <alias name="statusDescription" field="description" entity-alias="SI"/>
+        <alias name="facilityName" entity-alias="FAC"/>
+        <alias name="closedDate" field="statusDate" entity-alias="ICIS"/>
+    </view-entity>
+
+    <view-entity entity-name="InventoryCountImportItemView" package="co.hotwax.warehouse">
+        <member-entity entity-alias="ICI" entity-name="co.hotwax.warehouse.InventoryCountImport"/>
+        <member-entity entity-alias="ICII" entity-name="co.hotwax.warehouse.InventoryCountImportItem" join-from-alias="ICI">
+            <key-map field-name="inventoryCountImportId"/>
+        </member-entity>
+        <member-entity entity-alias="ICIV" entity-name="co.hotwax.warehouse.InvCountImportVariance" join-from-alias="ICII" join-optional="true">
+            <key-map field-name="inventoryCountImportId"/>
+            <key-map field-name="importItemSeqId" related="invCountImportItemSeqId"/>
+        </member-entity>
+        <member-entity entity-alias="USR" entity-name="org.apache.ofbiz.security.login.UserLogin" join-from-alias="ICII" join-optional="true">
+            <key-map field-name="countedByUserLoginId" related="userLoginId"/>
+        </member-entity>
+        <member-entity entity-alias="PER" entity-name="org.apache.ofbiz.party.party.Person" join-from-alias="USR" join-optional="true">
+            <key-map field-name="partyId"/>
+        </member-entity>
+        <member-entity entity-alias="PG" entity-name="org.apache.ofbiz.party.party.PartyGroup" join-from-alias="USR" join-optional="true">
+            <key-map field-name="partyId"/>
+        </member-entity>
+        <alias-all entity-alias="ICI"/>
+        <alias-all entity-alias="ICII">
+            <exclude field="inventoryCountImportId"/>
+            <exclude field="statusId"/>
+            <exclude field="createdDate"/>
+        </alias-all>
+        <alias-all entity-alias="ICIV">
+            <exclude field="invCountImportItemSeqId"/>
+            <exclude field="productId"/>
+            <exclude field="productIdentifier"/>
+            <exclude field="locationSeqId"/>
+        </alias-all>
+        <alias name="itemCreatedDate" field="createdDate" entity-alias="ICII"/>
+        <alias name="itemStatusId" field="statusId" entity-alias="ICII"/>
+        <alias name="countedByFirstName" field="firstName" entity-alias="PER"/>
+        <alias name="countedByLastName" field="lastName" entity-alias="PER"/>
+        <alias name="countedByGroupName" field="groupName" entity-alias="PG"/>
+    </view-entity>
+    <view-entity entity-name="InventoryItemSum" package="co.hotwax.warehouse">
+        <member-entity entity-alias="II" entity-name="org.apache.ofbiz.product.inventory.InventoryItem"/>
+        <alias name="productId" entity-alias="II"/>
+        <alias name="facilityId" entity-alias="II"/>
+        <alias name="qoh" field="quantityOnHandTotal" entity-alias="II" function="sum"/>
+    </view-entity>
+
+    <view-entity entity-name="FacilityInventoryCountImportView" package="co.hotwax.warehouse">
+        <member-entity entity-alias="ICI" entity-name="co.hotwax.warehouse.InventoryCountImport"/>
+        <member-entity entity-alias="PSF" entity-name="org.apache.ofbiz.product.store.ProductStoreFacility" join-from-alias="ICI">
+            <key-map field-name="facilityId"/>
+        </member-entity>
+        <alias name="inventoryCountImportId" entity-alias="ICI"/>
+        <alias name="countTypeEnumId" entity-alias="ICI"/>
+        <alias name="facilityId" entity-alias="ICI"/>
+        <alias name="statusId" entity-alias="ICI"/>
+        <alias name="productStoreId" entity-alias="PSF"/>
+        <entity-condition>
+            <date-filter entity-alias="PSF"/>
+        </entity-condition>
+    </view-entity>
+
+</entities>

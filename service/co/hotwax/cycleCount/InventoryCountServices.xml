@@ -1,0 +1,543 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="create" noun="InventoryCountImports">
+        <description>Service to create Inventory Count Imports</description>
+        <in-parameters>
+            <parameter name="inventoryCountImports" type="List" required="true"/>
+        </in-parameters>
+        <actions>
+            <iterate list="inventoryCountImports" entry="inventoryCountImport">
+                <service-call name="create#co.hotwax.warehouse.InventoryCountImport"
+                              in-map="inventoryCountImport"/>
+            </iterate>
+            <return message="Inventory Count Imports created successfully."/>
+        </actions>
+    </service>
+
+    <service verb="get" noun="InventoryCountImportItemDetails">
+        <description>Service to get Inventory Count Import Item details.</description>
+        <!--Pass the inventoryCountImportId to fetch items of a particular Inventory Count only -->
+        <in-parameters>
+            <parameter name="inventoryCountImportId"/>
+            <parameter name="importItemSeqId"/>
+            <parameter name="statusId"/>
+            <parameter name="facilityId" type="List"/>
+            <parameter name="computeQOH" default-value="Y"/>
+            <parameter name="orderBy" default-value="-inventoryCountImportId, importItemSeqId"/>
+            <parameter name="pageIndex" type="Integer" default-value="0">
+                <description>The current page index to get the inventory count import items.</description>
+            </parameter>
+            <parameter name="pageSize" type="Integer" default-value="100">
+                <description>The maximum number of inventory count import items to display.</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters><parameter name="itemList" type="List"/></out-parameters>
+        <actions>
+            <entity-find entity-name="co.hotwax.warehouse.InventoryCountImportItemView" list="invCountImpItemItr">
+                <search-form-inputs default-order-by="${orderBy}" />
+                <econdition field-name="inventoryCountImportId" ignore-if-empty="true"/>
+                <econdition field-name="importItemSeqId" ignore-if-empty="true"/>
+                <econdition field-name="statusId" ignore-if-empty="true"/>
+                <econdition field-name="facilityId" operator="in" from="facilityId" ignore-if-empty="true"/>
+                <econdition field-name="itemStatusId" operator="not-equals" value="INV_COUNT_VOIDED"/>
+            </entity-find>
+            <set field="itemList" from="[]"/>
+            <iterate list="invCountImpItemItr" entry="invCountImpItem">
+                <set field="itemDetail" from="invCountImpItem?.getMap()"/>
+                <set field="qtyOnHand" from="0.0"/>
+                <entity-find-one entity-name="co.hotwax.warehouse.InvCountImportVariance" value-field="countImportVariance">
+                    <field-map field-name="inventoryCountImportId" from="invCountImpItem.inventoryCountImportId"/>
+                    <field-map field-name="invCountImportItemSeqId" from="invCountImpItem.importItemSeqId"/>
+                </entity-find-one>
+                <if condition="countImportVariance">
+                    <set field="qtyOnHand" from="countImportVariance.systemQuantityOnHand" default-value="0"/>
+                    <else>
+                        <if condition="computeQOH == 'Y'">
+                        <entity-find entity-name="co.hotwax.warehouse.InventoryItemSum" list="itemSummary">
+                            <econdition field-name="productId" from="invCountImpItem.productId"/>
+                            <econdition field-name="facilityId" from="invCountImpItem.facilityId"/>
+                        </entity-find>
+                        <if condition="itemSummary">
+                            <set field="qtyOnHand" from="itemSummary?.first?.qoh"/>
+                        </if>
+                        </if>
+                    </else>
+                </if>
+                <set field="itemDetail.qoh" from="qtyOnHand"/>
+
+                <!--Last count sync date-->
+                <entity-find entity-name="co.hotwax.warehouse.InventoryCountImportItemView" list="lastCountedItems" limit="1">
+                    <econdition field-name="productId" from="invCountImpItem.productId"/>
+                    <econdition field-name="facilityId" from="invCountImpItem.facilityId"/>
+                    <econdition field-name="statusId" value="INV_COUNT_COMPLETED"/>
+                    <econdition field-name="inventoryCountImportId" operator="not-equals" from="inventoryCountImportId"/>
+                    <select-field field-name="createdDate"/>
+                    <order-by field-name="-createdDate"/>
+                </entity-find>
+                <if condition="lastCountedItems &amp;&amp; lastCountedItems.size() > 0">
+                    <set field="itemDetail.lastCountedDate" from="lastCountedItems?.get(0).get('createdDate')"/>
+                </if>
+
+                <!--Get the accepted by user detail for the inventory count import item-->
+                <entity-find entity-name="co.hotwax.warehouse.InvCountImportStatus" list="itemStatusHistory" limit="1">
+                    <econdition field-name="inventoryCountImportId" from="invCountImpItem.inventoryCountImportId"/>
+                    <econdition field-name="importItemSeqId" from="invCountImpItem.importItemSeqId"/>
+                    <econdition field-name="statusId" value="INV_COUNT_COMPLETED" />
+                    <select-field field-name="changeByUserLoginId"/>
+                </entity-find>
+                <set field="itemDetail.acceptedByUserLoginId" from="itemStatusHistory?.first?.changeByUserLoginId"/>
+
+                <!-- fetch the Parent Product details -->
+                <entity-find entity-name="org.apache.ofbiz.product.product.ProductAssocAndFrom" list="parentProductDetails" cache="true">
+                    <econdition field-name="productIdTo" from="invCountImpItem.productId"/>
+                    <econdition field-name="productAssocTypeId" value="PRODUCT_VARIANT"/>
+                    <date-filter/>
+                </entity-find>
+                <set field="itemDetail.parentProductId" from="parentProductDetails?.first?.productId"/>
+                <set field="itemDetail.parentProductName" from="parentProductDetails?.first?.productName"/>
+                
+                <script>itemList.add(itemDetail)</script>
+            </iterate>
+        </actions>
+    </service>
+
+    <service verb="add" noun="InventoryCountImportItems">
+        <in-parameters>
+            <parameter name="inventoryCountImportId" required="true"/>
+            <parameter name="itemList" type="List"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="itemList" type="List"/>
+        </out-parameters>
+        <actions>
+            <if condition="itemList == null || itemList.size() == 0"><return message="No Items Found"/></if>
+            <iterate list="itemList" entry="item">
+                <if condition="item.productId">
+                    <entity-find-one entity-name="org.apache.ofbiz.product.product.Product" value-field="product" cache="true">
+                        <field-map field-name="productId" from="item.productId"/>
+                    </entity-find-one>
+                    <if condition="!product">
+                        <return error="true" message="Invalid product #${item.productId}"/>
+                    </if>
+                </if>
+                <if condition="!item.productId &amp;&amp; item.idType &amp;&amp; item.idValue">
+                    <entity-find entity-name="org.apache.ofbiz.product.product.GoodIdentification" list="goodIdentifications">
+                        <econdition field-name="goodIdentificationTypeId" from="item.idType"/>
+                        <econdition field-name="idValue" from="item.idValue"/>
+                        <date-filter/>
+                        <order-by field-name="fromDate"/>
+                    </entity-find>
+                    <if condition="goodIdentifications">
+                        <set field="item.productId" from="goodIdentifications[0].productId"/>
+                        <else>
+                            <return error="true" message="No product found with idType ${item.idType} and idValue ${item.idValue}."/>
+                        </else>
+                    </if>
+                </if>
+                <if condition="!item.productId">
+                    <return error="true" message="Missing product ID."/>
+                </if>
+
+                <if condition="item.productId">
+                    <set field="item.productId" from="item.productId"/>
+                    <set field="item.inventoryCountImportId" from="context.inventoryCountImportId"/>
+                    <!-- Not checking if idValue is already added. One can just reject duplicate records if added multiple times. -->
+                    <set field="item.createdDate" from="ec.user.nowTimestamp"/>
+                    <set field="item.createdByUserLoginId" from="ec.user.getUsername()"/>
+                    <service-call name="create#co.hotwax.warehouse.InventoryCountImportItem" in-map="item" out-map="createImportItemResult"/>
+                    <service-call name="create#co.hotwax.warehouse.InvCountImportStatus" in-map="[inventoryCountImportId:context.inventoryCountImportId, importItemSeqId:createImportItemResult.importItemSeqId, statusId:item.statusId, statusDate:ec.user.nowTimestamp, changeByUserLoginId:ec.user.getUsername()]"/>
+                    <set field="item.importItemSeqId" from="createImportItemResult.importItemSeqId"/>
+                </if>
+            </iterate>
+            <return message="Inventory Count Import Items added successfully."/>
+        </actions>
+    </service>
+
+    <service verb="update" noun="InventoryCountImportItems">
+        <description>Service to update Inventory Count Import Item.</description>
+        <in-parameters>
+            <parameter name="inventoryCountImportId" required="true"/>
+            <parameter name="itemList" type="List" required="true"/>
+        </in-parameters>
+        <actions>
+            <if condition="itemList == null || itemList.size() == 0"><return message="No Items Found"/></if>
+            <iterate list="itemList" entry="importItem">
+                <set field="importItem.inventoryCountImportId" from="inventoryCountImportId"/>
+                <service-call name="update#co.hotwax.warehouse.InventoryCountImportItem" in-map="importItem"/>
+            </iterate>
+            <return message="Inventory Count Import Items added successfully."/>
+        </actions>
+    </service>
+
+    <service verb="recount" noun="InventoryCountImportItems">
+        <description>Service to recount Inventory Count Import Items.</description>
+        <in-parameters>
+            <parameter name="inventoryCountImportId" required="true"/>
+            <parameter name="importItemSeqIds" type="List" required="true"/>
+        </in-parameters>
+        <actions>
+            <if condition="importItemSeqIds &amp;&amp; importItemSeqIds.size() > 0">
+                <iterate list="importItemSeqIds" entry="importItemSeqId">
+                    <entity-find-one entity-name="co.hotwax.warehouse.InventoryCountImportItem" value-field="existingImportItem"/>
+                    <if condition="existingImportItem">
+                        <set field="existingImportItem.statusId" value="INV_COUNT_REJECTED"/>
+                        <service-call name="update#InventoryCountImportItem" in-map="existingImportItem" out-map="context"/>
+
+                        <set field="existingImportItem.statusId" value="INV_COUNT_CREATED"/>
+                        <set field="existingImportItem.quantity" from="null"/>
+                        <set field="existingImportItem.importItemSeqId" from="null"/>
+                        <set field="existingImportItem.countedByUserLoginId" from="null"/>
+                        <service-call name="create#co.hotwax.warehouse.InventoryCountImportItem" in-map="existingImportItem"/>
+                    </if>
+                </iterate>
+            </if>
+        </actions>
+    </service>
+
+    <service verb="get" noun="InventoryCountImportDetails">
+        <in-parameters>
+            <parameter name="inventoryCountImportIds" type="List" required="true"/>
+        </in-parameters>
+        <out-parameters><parameter name="importStats" type="List"/></out-parameters>
+        <actions>
+            <set field="importStats" from="[]"/>
+            <iterate list="inventoryCountImportIds" entry="countImportId">
+                <service-call name="co.hotwax.cycleCount.InventoryCountServices.get#InventoryCountImport" in-map="[inventoryCountImportId:countImportId]" out-map="countImport"/>
+                <script>
+                    importStats.add(new HashMap(countImport));
+                    countImport.clear();
+                </script>
+            </iterate>
+        </actions>
+    </service>
+    <service verb="get" noun="InventoryCountImport">
+        <in-parameters><parameter name="inventoryCountImportId" required="true"/></in-parameters>
+        <out-parameters>
+            <auto-parameters entity-name="co.hotwax.warehouse.InventoryCountImportView"/>
+            <parameter name="totalItems"/>
+            <parameter name="itemCounted"/>
+            <parameter name="rejectedCount"/>
+            <parameter name="totalVariance"/>
+            <parameter name="statusHistory"/>
+        </out-parameters>
+        <actions>
+            <entity-find-one entity-name="co.hotwax.warehouse.InventoryCountImportView" value-field="countImport"/>
+            <if condition="!countImport"><return/></if>
+
+            <script>context.putAll(countImport)</script>
+            <entity-find entity-name="co.hotwax.warehouse.InventoryCountImportItem" list="itemList">
+                <econdition field-name="inventoryCountImportId"/>
+                <econdition field-name="statusId" operator="not-equals" value="INV_COUNT_VOIDED"/>
+            </entity-find>
+            <set field="context.totalItems" from="(itemList?.size() ?:0)"/>
+            <set field="context.itemCounted" from="(itemList?.findAll{it.quantity != null &amp;&amp; it.quantity > 0}?.size() ?:0)"/>
+            <set field="context.rejectedCount" from="(itemList?.findAll{it.statusId == 'INV_COUNT_REJECTED'}?.size() ?:0)"/>
+
+            <entity-find entity-name="co.hotwax.warehouse.InvCountImportVariance" list="varianceList">
+                <econdition field-name="inventoryCountImportId"/>
+            </entity-find>
+            <set field="context.totalVariance" from="(varianceList?.stream()?.map(it -> (it.varianceQuantityOnHand?:0.0))?.reduce(BigDecimal.ZERO, BigDecimal::add) ?:0)"/>
+            
+            <entity-find entity-name="co.hotwax.warehouse.InvCountImportStatus" list="statusHistory">
+                <econdition field-name="inventoryCountImportId"/>
+            </entity-find>
+        </actions>
+    </service>
+
+    <service verb="accept" noun="InventoryCountImportItem">
+        <in-parameters>
+            <parameter name="inventoryCountImportId" required="true"/>
+            <parameter name="importItemSeqId" required="true"/>
+            <parameter name="quantity"/>
+            <parameter name="systemQOH"/>
+            <parameter name="varianceQty"/>
+            <parameter name="reason"/>
+            <parameter name="comments"/>
+        </in-parameters>
+        <actions>
+            <entity-find-one entity-name="co.hotwax.warehouse.InventoryCountImportItemView" value-field="invCountImpItem"/>
+
+            <set field="userName" from="ec.user.username" default-value="${System.getProperty('default.oms.user')}"/>
+
+            <!-- First record the record cycle count. -->
+            <set field="inMap" from="[:]"/>
+            <set field="inMap.productId" from="invCountImpItem.productId"/>
+            <set field="inMap.facilityId" from="invCountImpItem.facilityId"/>
+            <set field="inMap.quantity" from="context.quantity"/>
+            <set field="inMap.reason" from="context.reason"/>
+            <set field="inMap.comments" from="context.comments"/>
+            <service-call name="co.hotwax.cycleCount.InventoryCountServices.run#RecordCycleCount"
+                          in-map="inMap" out-map="result"/>
+
+            <!-- Create Inventory import variance record to track history -->
+            <set field="inMap.inventoryCountImportId" from="invCountImpItem.inventoryCountImportId"/>
+            <set field="inMap.invCountImportItemSeqId" from="invCountImpItem.importItemSeqId"/>
+            <set field="inMap.locationSeqId" from="invCountImpItem.locationSeqId"/>
+            <set field="inMap.systemQuantityOnHand" from="systemQOH"/>
+            <set field="inMap.actualQuantityOnHand" from="quantity"/>
+            <set field="inMap.varianceQuantityOnHand" from="varianceQty"/>
+            <service-call name="create#co.hotwax.warehouse.InvCountImportVariance" in-map="inMap"/>
+
+            <!-- Marking Item as accepted/completed. -->
+            <service-call name="update#co.hotwax.warehouse.InventoryCountImportItem" in-map="[inventoryCountImportId:context.inventoryCountImportId, importItemSeqId:context.importItemSeqId, statusId:'INV_COUNT_COMPLETED']"/>
+            <return type="info" message="Inventory Count Import Item Accepted."/>
+        </actions>
+    </service>
+    <service verb="run" noun="RecordCycleCount" type="oms-rest" location="service/recordInventoryCount" method="post">
+        <in-parameters>
+            <parameter name="productId"/>
+            <parameter name="facilityId"/>
+            <parameter name="quantity"/>
+            <parameter name="reason"/>
+            <parameter name="comments"/>
+        </in-parameters>
+    </service>
+
+
+    <service verb="upload" noun="InventoryCountImports">
+        <in-parameters>
+            <parameter name="uploadedFile" type="org.apache.commons.fileupload.FileItem" required="true"/>
+        </in-parameters>
+        <actions>
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType">
+                <field-map field-name="systemMessageTypeId" value="ImportInventoryCounts"/>
+            </entity-find-one>
+
+            <set field="fileName" from="uploadedFile.getName()"/>
+            <set field="fileName" from="fileName.substring(0, fileName.lastIndexOf('.csv'))"/>
+            <set field="csvFilePath" from="ec.resource.expand(systemMessageType.receivePath, null,
+            [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS'), fileName: fileName], false)"/>
+            <set field="fileReference" from="ec.resource.getLocationReference(csvFilePath)"/>
+
+            <script><![CDATA[
+                fileStream = uploadedFile.getInputStream()
+                try {
+                    fileReference.putStream(fileStream)
+                } finally {
+                    fileStream.close()
+                }
+            ]]></script>
+            <service-call name="create#moqui.service.message.SystemMessage" transaction="force-new"
+                    in-map="[systemMessageTypeId : 'ImportInventoryCounts', statusId:'SmsgReceived', isOutgoing:'N', messageText: csvFilePath, initDate:ec.user.nowTimestamp]"
+                    out-map="result"/>
+        </actions>
+    </service>
+    <service verb="consume" noun="InventoryCountImportCsv" transaction-timeout="7200">
+        <in-parameters>
+            <parameter name="systemMessageId" required="true"/>
+        </in-parameters>
+        <actions>
+            <entity-find-one entity-name="moqui.service.message.SystemMessage" value-field="systemMessage"/>
+            <if condition="!systemMessage">
+                <return error="true" message="SystemMessage record not found for systemMessageId: ${systemMessageId}"/>
+            </if>
+            <set field="csvData" from="ec.resource.getLocationReference(systemMessage.messageText).getText()"/>
+            <if condition="!csvData">
+                <return error="true" message="Csv data not found for systemMessageId: ${systemMessageId}"/>
+            </if>
+            <script>
+                recordsLoaded = ec.entity.makeDataLoader().csvText(csvData).csvEntityName("co.hotwax.cycleCount.InventoryCountServices.import#InventoryCount").load()
+            </script>
+            <message>Loaded ${recordsLoaded} inventory count import items</message>
+        </actions>
+    </service>
+    <service verb="import" noun="InventoryCount">
+        <in-parameters>
+            <parameter name="countImportName" required="true"/>
+            <parameter name="facilityId"/>
+            <parameter name="externalFacilityId"/>
+            <parameter name="statusId"/>
+            <parameter name="dueDate"/>
+            <parameter name="productId"/>
+            <parameter name="idType"/>
+            <parameter name="idValue"/>
+        </in-parameters>
+        <actions>
+
+            <service-call name="co.hotwax.cycleCount.InventoryCountServices.validate#InventoryCount"
+                          in-map="context"
+                          out-map="validationResult"/>
+            <if condition="!validationResult.errorList.isEmpty()">
+                <script>errorMessage = validationResult.errorList.join("; ")</script>
+                <return error="true" message="${errorMessage}"/>
+            </if>
+
+            <if condition="!facilityId &amp;&amp; externalFacilityId">
+                <entity-find entity-name="org.apache.ofbiz.product.facility.Facility" list="facilities">
+                    <econdition field-name="externalId" from="externalFacilityId"/>
+                </entity-find>
+                <set field="facilityId" from="facilities?.first?.facilityId"/>
+            </if>
+
+            <if condition="!statusId || (statusId == 'INV_COUNT_ASSIGNED' &amp;&amp; !facilityId)">
+                <set field="statusId" value="INV_COUNT_CREATED"/>
+            </if>
+
+            <entity-find entity-name="co.hotwax.warehouse.InventoryCountImport" list="inventoryCountImports">
+                <econdition field-name="countImportName"/>
+                <econdition field-name="facilityId" or-null="true"/>
+                <!--Allowing addition of items in the existing cycle count in draft or assigned status only-->
+                <econdition field-name="statusId" from="statusId" ignore-if-empty="true"/>
+            </entity-find>
+            <set field="inventoryCountImportId" from="inventoryCountImports?.first?.inventoryCountImportId"/>
+            
+            <if condition="!inventoryCountImportId">
+                <service-call name="create#co.hotwax.warehouse.InventoryCountImport"
+                        in-map="context + [statusId: statusId, uploadedByUserLogin: ec.user.getUsername(), createdDate: ec.user.nowTimestamp]"
+                        out-map="result"/>
+                <set field="inventoryCountImportId" from="result.inventoryCountImportId"/>
+            </if>
+            <service-call name="co.hotwax.cycleCount.InventoryCountServices.add#InventoryCountImportItems"
+                    in-map="[inventoryCountImportId: inventoryCountImportId, itemList: [[productId: productId, idType: idType, idValue: idValue, statusId: 'INV_COUNT_CREATED']] ]"
+                    out-map="result"/>
+        </actions>
+    </service>
+    <service verb="validate" noun="InventoryCount">
+        <implements service="co.hotwax.cycleCount.InventoryCountServices.import#InventoryCount"/>
+        <out-parameters>
+            <parameter name="errorList"/>
+        </out-parameters>
+        <actions>
+            <set field="errorList" from="[]"/>
+            <script>
+                import java.time.format.DateTimeFormatter
+                import java.time.format.DateTimeParseException
+            </script>
+
+            <!--Processing cycle count items in Draft and Assigned status only-->
+            <set field="allowedStatusIds" value="['INV_COUNT_CREATED', 'INV_COUNT_ASSIGNED']"/>
+            <if condition="statusId != null &amp;&amp; !allowedStatusIds.contains(statusId)">
+                <script>errorList.add("Invalid statusId: ${statusId}. Allowed values are INV_COUNT_CREATED or INV_COUNT_ASSIGNED.")</script>
+            </if>
+
+            <!-- Validate facilityId -->
+            <if condition="facilityId">
+                <entity-find-one entity-name="org.apache.ofbiz.product.facility.Facility" value-field="facility"/>
+                <if condition="!facility">
+                    <script>errorList.add("Invalid facilityId: ${facilityId}. No matching facility found.")</script>
+                </if>
+            </if>
+
+            <!-- Validate externalFacilityId -->
+            <if condition="!facilityId &amp;&amp; externalFacilityId">
+                <entity-find entity-name="org.apache.ofbiz.product.facility.Facility" list="facilities">
+                    <econdition field-name="externalId" from="externalFacilityId"/>
+                </entity-find>
+                <if condition="!facilities">
+                    <script>errorList.add("Invalid externalFacilityId: ${externalFacilityId}. No matching facility found.")</script>
+                </if>
+            </if>
+
+            <!-- Validate dueDate format: yyyy-MM-dd -->
+            <if condition="dueDate">
+                <script>
+                    try {
+                        LocalDate.parse(dueDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                    } catch (DateTimeParseException e) {
+                        errorList.add("Invalid dueDate format: ${dueDate}. Expected format is yyyy-MM-dd.")
+                    }
+                </script>
+            </if>
+        </actions>
+    </service>
+    <service verb="get" noun="UploadedCsvFile">
+        <in-parameters>
+            <parameter name="systemMessageId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="csvData"/>
+        </out-parameters>
+        <actions>
+            <entity-find-one entity-name="moqui.service.message.SystemMessage" value-field="systemMessage"/>
+            <if condition="!systemMessage">
+                <return error="true" message="SystemMessage record not found for systemMessageId: ${systemMessageId}"/>
+            </if>
+            <set field="csvData" from="ec.resource.getLocationReference(systemMessage.messageText).getText()"/>
+        </actions>
+    </service>
+    
+    <service verb="findOrCreate" noun="RejectedItemCycleCount">
+        <in-parameters>
+            <parameter name="productId" required="true"/>
+            <parameter name="facilityId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="inventoryCountImportItem" type="Map"/>
+        </out-parameters>
+        <actions>
+            <entity-find-one entity-name="InventoryCountImport" value-field="inventoryCount">
+                <field-map field-name="countTypeEnumId" value="REJ_ITEM_COUNT"/>
+                <field-map field-name="statusId" value="INV_COUNT_CREATED"/>
+                <field-map field-name="facilityId" from="facilityId"/>
+            </entity-find-one>
+            <if condition="!inventoryCount">
+                <service-call name="create#co.hotwax.warehouse.InventoryCountImport"
+                              in-map="[countImportName: 'Rejected Item Count',
+                              countTypeEnumId : 'REJ_ITEM_COUNT',
+                              facilityId : facilityId,
+                              statusId : 'INV_COUNT_CREATED',
+                              uploadedByUserLogin: ec.user.getUsername(),
+                              createdDate: ec.user.nowTimestamp]"
+                              out-map="result"
+                />
+                <set field="inventoryCountImportId" from="result.inventoryCountImportId"/>
+            <else>
+                <set field="inventoryCountImportId" from="inventoryCount.inventoryCountImportId"/>
+                <entity-find entity-name="InventoryCountImportItem"
+                             list="inventoryCountItems">
+                    <econdition field-name="inventoryCountImportId" from="inventoryCountImportId"/>
+                    <econdition field-name="productId" from="productId"/>
+                </entity-find>
+                <if condition="inventoryCountItems">
+                    <set field="inventoryCountImportItem" from="inventoryCountItems?.first"/>
+                    <return/>
+                </if>
+            </else>
+            </if>
+            <service-call name="create#co.hotwax.warehouse.InventoryCountImportItem"
+                          in-map="[inventoryCountImportId : inventoryCountImportId,
+                          statusId : 'INV_COUNT_CREATED',
+                          productId : productId,
+                          uploadedByUserLogin: ec.user.getUsername(),
+                          createdDate: ec.user.nowTimestamp]"
+                          out-map="resultItem"
+            />
+            <set field="inventoryCountImportItem" from="resultItem"/>
+        </actions>
+    </service>
+
+    <service verb="approve" noun="InventoryCountImport">
+        <in-parameters>
+            <parameter name="countTypeEnumId" required="false"/>
+            <parameter name="productStoreId" required="false"/>
+        </in-parameters>
+        <actions>
+            <entity-find entity-name="FacilityInventoryCountImportView" list="inventoryCounts">
+                <econdition field-name="countTypeEnumId" from="countTypeEnumId" ignore-if-empty="true"/>
+                <econdition field-name="statusId" value="INV_COUNT_CREATED"/>
+                <econdition field-name="productStoreId" from="productStoreId" ignore-if-empty="true"/>
+            </entity-find>
+            <if condition="inventoryCounts == null || inventoryCounts.size() == 0"><return message="No inventory counts found"/></if>
+            <iterate list="inventoryCounts" entry="inventoryCount">
+                <set field="inventoryCount.statusId" value="INV_COUNT_ASSIGNED"/>
+                <service-call name="update#co.hotwax.warehouse.InventoryCountImport"
+                              in-map="inventoryCountImportId:inventoryCount.inventoryCountImportId,
+                              statusId:inventoryCount.statusId"/>
+                <entity-find entity-name="InventoryCountImportItem" list="inventoryCountItems">
+                    <econdition field-name="inventoryCountImportId" from="inventoryCount.inventoryCountImportId"/>
+                </entity-find>
+                <iterate list="inventoryCountItems" entry="inventoryCountItem">
+                    <set field="inventoryCountItem.statusId" value="INV_COUNT_ASSIGNED"/>
+                    <service-call name="update#co.hotwax.warehouse.InventoryCountImportItem"
+                                  in-map="inventoryCountImportId:inventoryCountItem.inventoryCountImportId,
+                                  importItemSeqId:inventoryCountItem.importItemSeqId,
+                                  statusId:inventoryCountItem.statusId"/>
+                </iterate>
+            </iterate>
+        </actions>
+    </service>
+
+</services>
