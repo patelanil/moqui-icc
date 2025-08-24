@@ -1,0 +1,70 @@
+<addons default-repository="github">
+    <!--
+    ========== MODIFYING THIS FILE NOT RECOMMENDED ==========
+
+    Contains known open source Moqui components, those in the GitHub 'moqui' group and others.
+
+    To add or override repository, runtime, and component elements use a "myaddons.xml" file.
+    -->
+    <repository name="github">
+        <location type="current" url="https://github.com/${component.'@group'}/${component.'@repository-name' ?: component.'@name'}/archive/${component.'@branch'}.zip"/>
+        <location type="release" url="https://github.com/${component.'@group'}/${component.'@repository-name' ?: component.'@name'}/archive/v${component.'@version'}.zip"/>
+        <location type="git" url="https://github.com/${component.'@group'}/${component.'@repository-name' ?: component.'@name'}.git"/>
+    </repository>
+    <repository name="git-hotwax">
+        <!--<location type="release" url="https://git.hotwax.co/${component.'@group'}/${component.'@name'}/-/archive/v${component.'@version'}/${component.'@name'}-v${component.'@version'}.zip"/>-->
+        <!--Using the git repo instead the release path, need to figure out how we -->
+        <location type="current" url="https://git.hotwax.co/${component.'@group'}/${component.'@repository-name' ?: component.'@name'}.git"/>
+        <location type="release" url="https://git.hotwax.co/${component.'@group'}/${component.'@repository-name' ?: component.'@name'}.git"/>
+        <location type="git" url="https://git.hotwax.co/${component.'@group'}/${component.'@repository-name' ?: component.'@name'}.git"/>
+    </repository>
+
+    <!-- Public Repositories -->
+    <component name="moqui-sftp" group="hotwax" branch="main" version="1.2.3"/>
+    <component name="moqui-kie" group="hotwax" branch="main" version="1.0.4"/>
+    <component name="moqui-fop" group="hotwax" branch="main" version="1.1.4"/>
+    <component name="mantle-shopify-connector" group="hotwax" branch="main" version="2.5.2"/>
+    <component name="order-routing" repository-name="OrderRouting" group="hotwax" branch="main" version="1.9.0"/>
+    <component name="available-to-promise" repository-name="available-to-promise-maarg" group="hotwax" branch="main" version="3.3.0"/>
+    <component name="ofbiz-oms-udm" group="hotwax" branch="main" version="2.5.4"/>
+    <component name="inventory-count" repository-name="inventory-count-maarg" group="hotwax" branch="main" version="2.9.1"/>
+    <component name="oms-bi" group="hotwax" branch="main" version="1.4.0"/>
+    <component name="shopify-delivery-rate" group="hotwax" branch="main" version="1.1.4" />
+    <component name="oms" group="hotwax" branch="main" version="1.5.7"/>
+    <component name="mantle-netsuite-connector" group="hotwax" branch="main" version="1.6.1"/>
+
+    <!-- Private Repositories -->
+    <component name="maarg-util" group="HC2/plugins" repository="git-hotwax" private="Y" branch="main" version="2.4.6"/>
+    <component name="maargsetup" group="tools" repository="git-hotwax" private="Y" branch="main" version="1.0.0"/>
+    <component name="maarg-docker-config" group="HC2" repository="git-hotwax" private="Y" branch="main"  version="1.0.0"/>
+    <component name="predictspring" group="HC2/plugins/" repository="git-hotwax" private="Y" branch="main"  version="1.5.9"/>
+    <component name="ofbiz-oms-usl" group="HC2/plugins/" repository="git-hotwax" private="Y" branch="main" version="3.4.4"/>
+    <component name="shopify-oms-bridge" group="HC2" repository="git-hotwax" private="Y" branch="main" version="1.8.5"/>
+    <component name="gorgias" group="HC2/plugins/" repository="git-hotwax" private="Y" branch="main" version="1.1.0"/>
+    <component name="poorti" group="HC2" repository="git-hotwax" private="Y" branch="main" version="1.2.9"/>
+    <component name="app-bridge" group="HC2" repository="git-hotwax" private="Y" branch="main" version="1.0.0"/>
+    <component name="smca-maarg" group="sm" repository="git-hotwax" private="Y" branch="main" version="1.0.0"/>
+    <component name="newera" group="commerce/deliveries/" repository="git-hotwax" private="Y" branch="main" version="1.0.0"/>
+    <component name="nifi-transform" group="HC2/plugins/" repository="git-hotwax" private="Y" branch="main" version="1.0.0"/>
+    <component name="nifi-transform" group="sm" repository="git-hotwax" private="Y" branch="main" version="1.0.0"/>
+    <component name="erp-integration" group="HC2/plugins" repository="git-hotwax" private="Y" branch="main" version="1.0.0"/>
+    
+    <!-- Component Sets -->
+    <!-- NOTE: using these component sets is NOT recommended, with so many components doing
+        different things it is better to add and configure only the components you need;
+        some components change system behavior and may cause unexpected and undesired results -->
+
+    <component-set name="all" components="moqui-sftp,moqui-kie,moqui-fop,mantle-shopify-connector,order-routing,available-to-promise,ofbiz-oms-udm,inventory-count,oms-bi,shopify-delivery-rate,oms,maarg-util,ofbiz-oms-usl,shopify-oms-bridge,poorti,mantle-netsuite-connector,predictspring,gorgias,app-bridge,erp-integration"/>
+    <component-set name="oms" components="moqui-sftp,moqui-kie,moqui-fop,mantle-shopify-connector,order-routing,available-to-promise,ofbiz-oms-udm,inventory-count,oms-bi,shopify-delivery-rate,oms,maarg-util,ofbiz-oms-usl,shopify-oms-bridge,poorti"/>
+
+    <!-- For Development
+        gradlew getComponent -Pcomponent=gorgias
+    -->
+    <!-- Release builds:
+        gradlew getComponentSet -PcomponentSet=oms -PlocationType=release
+        gradlew getComponent -Pcomponent=gorgias -PlocationType=release
+        gradlew getComponent -Pcomponent=gorgias -PlocationType=release
+        - these make the source distro for each
+        - to build the demo war: gradle load test addRuntime
+    -->
+</addons>

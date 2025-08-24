@@ -1,0 +1,39 @@
+[{
+  "productStoreId" : "SG_STORE",
+  "productId" : "10002",
+  "shopifyProductId" : "31675487486045",
+  "shopifyInventoryItemId" : "33346316861533",
+  "sku" : "31675487486045",
+  "computedLastInventoryCount" : 7956,
+  "updatedDate" : "2022-08-09 08:38:49.765",
+  "facilityId" : null,
+  "facilityTypeId" : null,
+  "storeName" : "Superga",
+  "storeExternalId" : "4",
+  "threshold" : 2,
+  "preOrderQueue" : 0,
+  "backOrderQueue" : 0,
+  "virtualQueue" : 3,
+  "productIdentifications" : [ {
+    "productId" : "10002",
+    "fromDate" : "2022-06-24 07:35:15.631",
+    "lastUpdatedStamp" : "2022-06-24 07:35:15.642",
+    "idValue" : "V-ABIE",
+    "goodIdentificationTypeId" : "SHOPIFY_PROD_SKU",
+    "thruDate" : null
+  }, {
+    "goodIdentificationTypeId" : "SKU",
+    "productId" : "10002",
+    "fromDate" : "2022-06-24 07:35:15.631",
+    "lastUpdatedStamp" : "2022-06-24 07:35:15.643",
+    "idValue" : "V-ABIE",
+    "thruDate" : null
+  }, {
+    "idValue" : "190495643971",
+    "goodIdentificationTypeId" : "UPCA",
+    "productId" : "10002",
+    "fromDate" : "2022-06-24 07:35:15.631",
+    "lastUpdatedStamp" : "2022-06-24 07:35:15.646",
+    "thruDate" : null
+  } ]
+}]

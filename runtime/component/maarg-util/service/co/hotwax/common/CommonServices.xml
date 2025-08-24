@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="get" noun="AvailableTimeZones">
+        <out-parameters>
+            <parameter name="timeZones" type="List">
+                <parameter name="timeZone" type="Map">
+                    <parameter name="id"/>
+                    <parameter name="label"/>
+                    <parameter name="offset"/>
+                </parameter>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <script>
+                timeZones = TimeZone.getAvailableIDs().collect { id ->
+                    TimeZone tz = TimeZone.getTimeZone(id)
+                    [
+                        id: tz.ID,
+                        label: tz.getDisplayName(tz.useDaylightTime(), TimeZone.LONG, ec.user.getLocale()),
+                        offset: tz.rawOffset
+                    ]
+                }.toSorted { a, b -> a.id &lt;=&gt; b.id }
+            </script>
+        </actions>
+    </service>
+    <service verb="transform" noun="JsonLToJson">
+        <description>
+            This service transforms JSON Lines into a nested JSON object with up to three levels,
+            using an input path to read the JSONL file and an output path to write the resulting JSON maps.
+        </description>
+        <in-parameters>
+            <parameter name="inputPath" required="true"/>
+            <parameter name="outputPath" required="true"/>
+        </in-parameters>
+        <actions>
+            <set field="parentMap" from="[:]"/>
+            <script><![CDATA[
+                import org.moqui.impl.context.ContextJavaUtil
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import java.nio.charset.StandardCharsets
+
+                try {
+                    //json file
+                    File feedFile = new File(outputPath)
+                    if (!feedFile.parentFile.exists()) feedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the try statement,
+                    so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, feedFile);
+                    JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+
+                        //reading json lines file and
+                        inputStream = ec.resource.getLocationStream(inputPath)
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
+                        while ((line = reader.readLine()) != null) {
+                            line_map = ContextJavaUtil.jacksonMapper.readValue(line, Map.class)
+                            if (!line_map.containsKey("__parentId")) {
+                                if(!parentMap.isEmpty()) {
+                                    ContextJavaUtil.jacksonMapper.writerWithDefaultPrettyPrinter().writeValue(jGenerator, parentMap)
+                                    parentMap.clear()
+                                }
+                                parentMap.putAll(line_map)
+                            } else {
+                                if (line_map.__parentId == parentMap.id) {
+                                    childNode = (line_map.id =~ /\/([^\/]+)\/[^\/]+$/)[0][1]
+                                    if (!parentMap[childNode]) {
+                                        parentMap[childNode] = []
+                                    }
+                                    parentMap[childNode] << line_map
+                                } else {
+                                    parentNode = (line_map.__parentId =~ /\/([^\/]+)\/[^\/]+$/)[0][1]
+                                    parentNestedMap = parentMap[parentNode][-1]
+                                    if (parentNestedMap.id = line_map.__parentId) {
+                                        childNode = (line_map.id =~ /\/([^\/]+)\/[^\/]+$/)[0][1]
+                                        if (!parentNestedMap[childNode]) {
+                                            parentNestedMap[childNode] = []
+                                        }
+                                        parentNestedMap[childNode] << line_map
+                                    }
+                                }
+                            }
+                        }
+                        ContextJavaUtil.jacksonMapper.writerWithDefaultPrettyPrinter().writeValue(jGenerator, parentMap)
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.error("Error preparing json file", e)
+                }
+            ]]></script>
+        </actions>
+    </service>
+    <service verb="queue" noun="FeedSystemMessage" authenticate="anonymous-all">
+        <description>
+            This is a generic service to queue a feed generation system message.
+            Default behaviour is to generate an ad-hoc feed (runAsBatch=false) as needed with additionalParameters map containing any additional filter parameters.
+            To generate the feed as a batch process create a ServiceJob with systemMessageTypeId, systemMessageRemoteId and runAsBatch=true.
+        </description>
+        <in-parameters>
+            <parameter name="systemMessageTypeId" required="true"/>
+            <parameter name="systemMessageRemoteId" required="true"/>
+            <parameter name="fromDate"/>
+            <parameter name="thruDate"/>
+            <parameter name="fromDateLabel"/>
+            <parameter name="thruDateLabel"/>
+            <parameter name="additionalParameters" type="Map"/>
+            <parameter name="runAsBatch" type="Boolean" default-value="false"/>
+        </in-parameters>
+        <actions>
+            <set field="queryParams" from="[:]"/>
+            <if condition="runAsBatch">
+                <if condition="!fromDate">
+                    <entity-find entity-name="moqui.service.message.SystemMessage" list="systemMessageList" limit="1">
+                        <econdition field-name="systemMessageTypeId" from="systemMessageTypeId"/>
+                        <econdition field-name="systemMessageRemoteId" from="systemMessageRemoteId"/>
+                        <econdition field-name="statusId" value="SmsgSent"/>
+                        <econdition field-name="messageDate" operator="is-not-null"/>
+                        <order-by field-name="-messageDate"/>
+                    </entity-find>
+                    <if condition="systemMessageList">
+                        <set field="fromDate" from="systemMessageList[0].messageDate" type="String"/>
+                    </if>
+                </if>
+                <set field="thruDate" from="ec.user.nowTimestamp" type="String"/>
+            </if>
+            <set field="queryParams.fromDate" from="fromDate"/>
+            <set field="queryParams.thruDate" from="thruDate"/>
+            <set field="queryParams.fromDateLabel" from="fromDateLabel"/>
+            <set field="queryParams.thruDateLabel" from="thruDateLabel"/>
+            <if condition="additionalParameters">
+                <set field="queryParams" from="queryParams + additionalParameters"/>
+            </if>
+
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                          in-map="[systemMessageTypeId:systemMessageTypeId, systemMessageRemoteId:systemMessageRemoteId,
+                                       messageText:org.moqui.impl.context.ContextJavaUtil.jacksonMapper.writeValueAsString(queryParams),  sendNow:true, messageDate:thruDate]"
+                          out-map="queueSystemMessageOut"/>
+        </actions>
+    </service>
+    <service verb="release" noun="ServiceJobRunLock">
+        <in-parameters>
+            <parameter name="jobName" required="true"/>
+            <parameter name="jobRunId" required="true"/>
+        </in-parameters>
+        <actions>
+            <entity-find-one entity-name="moqui.service.job.ServiceJobRunLock" value-field="runLock"/>
+            <if condition="jobRunId != runLock?.jobRunId">
+                <return error="true" type="danger" message="Unable to release ${jobName} job run lock for run id ${jobRunId}"/>
+            </if>
+            <set field="message" value="Force released job run lock by ${ec.user.getUserId()}"/>
+            <service-call name="update#moqui.service.job.ServiceJobRun" in-map="[jobRunId:jobRunId, messages: message]" disable-authz="true"/>
+            <service-call name="update#moqui.service.job.ServiceJobRunLock" in-map="[jobName:jobName, jobRunId: null]" disable-authz="true"/>
+        </actions>
+    </service>
+    <service verb="upload" noun="File">
+        <in-parameters>
+            <parameter name="contentPath">
+                <description>
+                    By default, the system uploads the file to runtime://datamanager.
+                    If the contentPath is provided, it places file at runtime://datamanager/${contentPath}.
+                </description>
+            </parameter>
+            <parameter name="contentFile" type="org.apache.commons.fileupload.FileItem" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="fileName" required="true"/>
+            <parameter name="contentLocation" required="true"/>
+            <parameter name="fileSize" type="Long">
+                <description>Uploaded file size in Bytes</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <set field="fileName" from="contentFile.getName()"/>
+            <set field="fileSize" from="contentFile.getSize()"/>
+            <if condition="!org.moqui.resource.ResourceReference.isTextFilename(fileName)">
+                <return error="true" message="File ${fileName} type not supported."/>
+            </if>
+            <set field="contentRoot" from="ec.user.getPreference('mantle.content.root') ?: 'runtime://datamanager'"/>
+            <set field="newFileName" from="co.hotwax.datamanager.MaargDataLoaderImpl.prepareFileName(fileName, null)"/>
+            <if condition="contentPath">
+                <set field="cleanedPath" from="contentPath?.replaceAll('^/|/$', '')"/>
+                <set field="contentLocation" value="${contentRoot}/${cleanedPath}/${newFileName}"/>
+                <else>
+                    <set field="contentLocation" value="${contentRoot}/${newFileName}"/>
+                </else>
+            </if>
+
+            <set field="docRr" from="ec.resource.getLocationReference(contentLocation)"/>
+            <script>
+                try (fileStream = contentFile.getInputStream()) {
+                    docRr.putStream(fileStream)
+                }
+            </script>
+        </actions>
+    </service>
+    <service verb="upload" noun="DataManagerFile">
+        <implements service="co.hotwax.common.CommonServices.upload#File"/>
+        <in-parameters>
+            <auto-parameters entity-name="co.hotwax.datamanager.DataManagerLog"/>
+            <parameter name="parameters" type="List">
+                <parameter name="param" type="Map">
+                    <parameter name="parameterName"/>
+                    <parameter name="parameterValue"/>
+                </parameter>
+            </parameter>
+            <parameter name="logTypeEnumId" default-value="DmltImport"/>
+            <parameter name="configId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="logId"/>
+        </out-parameters>
+        <actions>
+            <entity-find-one entity-name="co.hotwax.datamanager.DataManagerConfig" value-field="config"/>
+            <if condition="!config">
+                <return error="true" message="No data manager config record found for configId ${configId}"/>
+            </if>
+            <set field="contentPath" value="imported/${configId}"/>
+            <service-call name="co.hotwax.common.CommonServices.upload#File" in-map="context" out-map="context"/>
+
+            <service-call name="create#co.hotwax.datamanager.DataManagerLog"
+                      in-map="context + [createdDate: ec.user.nowTimestamp, createdByUserLogin: ec.user.getUsername(),
+                          statusId: 'DmlsPending']" out-map="context"/>
+            <service-call name="create#co.hotwax.datamanager.DataManagerContent"
+                          in-map="context + [logContentTypeEnumId: 'DmcntImported']"/>
+            <if condition="parameters">
+                <iterate list="parameters" entry="logParameter">
+                    <service-call name="create#co.hotwax.datamanager.DataManagerParameter"
+                            in-map="[logId: logId, parameterName:logParameter.getKey(), parameterValue:logParameter.getValue()]"/>
+                </iterate>
+            </if>
+        </actions>
+    </service>
+    <service verb="remove" noun="DataManagerLog">
+        <in-parameters>
+            <parameter name="logId" required="true"/>
+        </in-parameters>
+        <actions>
+            <entity-find-one entity-name="co.hotwax.datamanager.DataManagerLog" value-field="dmLog"/>
+            <if condition="!dmLog">
+                <return error="true" message="No data manager log record found for logId ${logId}"/>
+            </if>
+            <entity-delete-by-condition entity-name="co.hotwax.datamanager.DataManagerParameter">
+                <econdition field-name="logId" from="logId"/>
+            </entity-delete-by-condition>
+            <entity-find entity-name="co.hotwax.datamanager.DataManagerContent" list="dmContents">
+                <econdition field-name="logId" from="logId"/>
+            </entity-find>
+            <iterate list="dmContents" entry="dmContent">
+                <if condition="dmContent.contentLocation">
+                    <script>
+                        rr = ec.resource.getLocationReference(dmContent.contentLocation)
+                        if (rr.getExists()) {
+                            rr.delete()
+                        }
+                    </script>
+                </if>
+                <entity-delete value-field="dmContent"/>
+            </iterate>
+            <log message="Purged DataManagerLog record with ID: ${logId}"/>
+            <entity-delete value-field="dmLog"/>
+        </actions>
+    </service>
+    <service verb="import" noun="OmsDataFile" type="oms-rest" location="service/uploadAndImportFile" method="POST">
+        <description>
+            Call the upload and import file service
+        </description>
+        <in-parameters>
+            <parameter name="configId" required="true"/>
+            <parameter name="parameters" type="Map"/>
+            <parameter name="fileProcessingDelay" type="Integer"/>
+            <parameter name="continueOnError" type="Boolean"/>
+            <parameter name="scheduleNow" type="Boolean" default-value="true"/>
+            <parameter name="createdByJobId"/>
+            <parameter name="uploadedFile" type="org.apache.commons.fileupload.FileItem" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="configId"/>
+            <parameter name="filePath"/>
+            <parameter name="uploadFileContentId"/>
+        </out-parameters>
+    </service>
+</services>

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+    <!-- TODO: skipped element title -->
+    <!-- TODO: skipped element version -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="NoteData" package="org.apache.ofbiz.common.note">
+        <field name="noteId" type="id" is-pk="true"></field>
+        <field name="noteName" type="text-medium"></field>
+        <field name="noteInfo" type="text-very-long"></field>
+        <field name="noteDateTime" type="date-time"></field>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="OmsUserPreference" package="org.apache.ofbiz.common.user" table-name="OMS_USER_PREFERENCE">
+<description>The UserPreference entity contains one entry per preference per
+          userLogin. User preferences are stored as key/value pairs (userPrefTypeId/userPrefValue).
+          All values are stored as strings. Value strings can be converted to
+          other data types by specifying a java data type in the userPrefDataType field.</description>        <field name="userLoginId" type="id-long" is-pk="true"></field>
+        <field name="userPrefTypeId" type="id-long" is-pk="true"><description>A unique identifier for this preference</description></field>
+        <field name="userPrefGroupTypeId" type="id-long"><description>Used to assemble groups of preferences</description></field>
+        <field name="userPrefValue" type="text-medium"><description>Contains the value of this preference</description></field>
+        <field name="userPrefDataType" type="id-long"><description>The java data type of this preference (empty = java.lang.String)</description></field>
+        <relationship type="one-nofk" fk-name="UP_USER_LOGIN" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="userLoginId"/>
+        </relationship>
+        <relationship type="one" fk-name="UP_USER_GROUP_TYPE" related="org.apache.ofbiz.common.user.UserPrefGroupType">
+            <key-map field-name="userPrefGroupTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="UserPrefGroupType" package="org.apache.ofbiz.common.user">
+<description>The UserPrefGroupType entity contains one entry per preference
+          group type.</description>        <field name="userPrefGroupTypeId" type="id-long" is-pk="true"></field>
+        <field name="description" type="text-medium"></field>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="SystemProperty" package="org.apache.ofbiz.common.property">
+        <field name="systemResourceId" type="id-long" is-pk="true"></field>
+        <field name="systemPropertyId" type="text-medium" is-pk="true"></field>
+        <field name="systemPropertyValue" type="text-medium"></field>
+        <field name="description" type="text-medium"></field>
+    </entity>
+</entities>
+

@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+    <service verb="run" noun="ServiceJob">
+        <description>Run a service job.</description>
+        <in-parameters>
+            <parameter name="jobName" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="jobRunId"/>
+        </out-parameters>
+        <actions>
+            <entity-find-one entity-name="moqui.service.job.ServiceJob" value-field="serviceJob"/>
+            <if condition="!serviceJob">
+                <return error="true" message="Service job with ${jobName} does not exists."/>
+            </if>
+
+            <if condition="serviceJob.permissionGroupId">
+                <entity-find entity-name="moqui.security.UserGroupPermission" list="jobPermissions" limit="1" cache="true">
+                    <econdition field-name="userGroupId" from="serviceJob.permissionGroupId"/>
+                    <econdition field-name="userPermissionId" value="SJ_RUN_NOW"/>
+                    <date-filter/>
+                </entity-find>
+                <if condition="!jobPermissions">
+                    <return error="true" message="Run now is not allowed for this job."/>
+                </if>
+            </if>
+
+            <script>
+                jobRunId = ec.service.job(jobName).run()
+            </script>
+            <return message="Scheduled job run ${jobRunId}."/>
+        </actions>
+    </service>
+    <service verb="get" noun="ServiceJobDetail">
+        <description>Get service job detail.</description>
+        <in-parameters>
+            <parameter name="jobName" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="jobDetail"/>
+        </out-parameters>
+        <actions>
+            <entity-find-one entity-name="moqui.service.job.ServiceJobAndProduct" value-field="serviceJob"/>
+            <if condition="!serviceJob">
+                <return error="true" message="Service job with ${jobName} does not exists."/>
+            </if>
+            <set field="jobDetail" from="serviceJob.getMap()"/>
+
+            <script>
+                try {
+                    jobDetail.cronDescription = co.hotwax.util.MaargUtil.getCronDescription(jobDetail.cronExpression, ec.user.getLocale())
+                    cronExecutionTime = org.moqui.impl.service.ScheduledJobRunner.getExecutionTime(jobDetail.cronExpression)
+                    nextExecutionTime = cronExecutionTime.nextExecution(java.time.ZonedDateTime.now()).orElse(null)
+                    if (nextExecutionTime != null) {
+                        jobDetail.nextExecutionDateTime = nextExecutionTime.toInstant().toEpochMilli()
+                    }
+                    jobDetail.executionTimeZone = TimeZone.getDefault().getID()
+                } catch (Exception e) {
+                    ec.logger.error("Error getting cron description: ${e.getMessage()}")
+                    jobDetail.cronDescription = e.getMessage()
+                }
+            </script>
+            <set field="jobDetail.schedule" from="schedule"/>
+
+            <entity-find entity-name="moqui.service.job.ServiceJobParameter" list="serviceJobParameters">
+                <econdition field-name="jobName" from="jobName"/>
+            </entity-find>
+            <set field="jobDetail.serviceJobParameters" from="serviceJobParameters"/>
+
+            <set field="sd" from="ec.service.getServiceDefinition(jobDetail.serviceName)"/>
+            <set field="serviceNode" from="sd.serviceNode"/>
+            <set field="inParameterNodes" from="serviceNode.first('in-parameters')?.children('parameter')"/>
+            <set field="serviceInParameters" from="[]"/>
+            <iterate list="inParameterNodes" entry="inParameterNode">
+                <set field="serviceInParameter" from="[:]"/>
+                <set field="attributes" from="inParameterNode.getAttributes()"/>
+                <set field="neededAttributeList" from="['name', 'type', 'required', 'default']"/>
+                <iterate list="neededAttributeList" entry="attribute">
+                    <script>serviceInParameter.put(attribute, attributes[attribute])</script>
+                </iterate>
+                <script>serviceInParameters.add(serviceInParameter)</script>
+            </iterate>
+            <set field="jobDetail.serviceInParameters" from="serviceInParameters"/>
+
+            <if condition="serviceJob.permissionGroupId">
+                <entity-find entity-name="moqui.security.UserGroupPermission" list="jobPermissions" cache="true">
+                    <econdition field-name="userGroupId" from="serviceJob.permissionGroupId"/>
+                    <date-filter/>
+                </entity-find>
+                <set field="jobDetail.jobPermissions" from="jobPermissions"/>
+            </if>
+        </actions>
+    </service>
+    <service verb="update" noun="ServiceJob">
+        <description>Update a service job.</description>
+        <in-parameters>
+            <auto-parameters entity-name="moqui.service.job.ServiceJob"/>
+            <parameter name="serviceJobParameters" type="List">
+                <parameter name="serviceJobParameter" type="Map">
+                    <parameter name="parameterName"/>
+                    <parameter name="parameterValue"/>
+                </parameter>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="jobName"/>
+        </out-parameters>
+        <actions>
+            <entity-find-one entity-name="moqui.service.job.ServiceJob" value-field="serviceJob"/>
+            <if condition="!serviceJob">
+                <return error="true" message="Service job with ${jobName} does not exists."/>
+            </if>
+
+            <if condition="serviceJob.permissionGroupId">
+                <entity-find entity-name="moqui.security.UserGroupPermission" list="jobPermissions" cache="true">
+                    <econdition field-name="userGroupId" from="serviceJob.permissionGroupId"/>
+                    <date-filter/>
+                </entity-find>
+                <set field="jobPermissionIds" from="jobPermissions?.collect { it.userPermissionId }"/>
+                <if condition="jobPermissionIds">
+                    <if condition="paused &amp;&amp; !jobPermissionIds.contains('SJ_STATUS_UPDATE')">
+                        <message error="true">Pausing/unpausing is not allowed for this job.</message>
+                    </if>
+                    <if condition="serviceJobParameters &amp;&amp; !jobPermissionIds.contains('SJ_PARAMETERS_UPDATE')">
+                        <message error="true">Updating job parameters is not allowed for this job.</message>
+                    </if>
+                    <if condition="cronExpression &amp;&amp; !jobPermissionIds.contains('SJ_CRON_UPDATE')">
+                        <message error="true">Updating cron expression is not allowed for this job.</message>
+                    </if>
+                    <if condition="ec.message.hasError()">
+                        <return error="true"/>
+                    </if>
+                </if>
+            </if>
+            
+            <if condition="cronExpression">
+                <script>
+                    try {
+                        cron = org.moqui.impl.service.ScheduledJobRunner.getCron(cronExpression)
+                        cron.validate()
+                    } catch (Exception e) {
+                        ec.logger.error("Invalid cron expression: ${e.getMessage()}")
+                        ec.message.addError("Invalid cron expression: ${e.getMessage()}")
+                        return
+                    }
+                </script>
+            </if>
+            <service-call name="update#moqui.service.job.ServiceJob" in-map="context" out-map="context"/>
+            <if condition="serviceJobParameters">
+                <iterate list="serviceJobParameters" entry="serviceJobParameter">
+                    <service-call name="store#moqui.service.job.ServiceJobParameter" in-map="serviceJobParameter + ['jobName': jobName]"/>
+                </iterate>
+            </if>
+            <return message="Updated service job ${jobName}."/>
+        </actions>
+    </service>
+</services>

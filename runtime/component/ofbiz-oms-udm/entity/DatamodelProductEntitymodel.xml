@@ -1,0 +1,1311 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+    <!-- TODO: skipped element title -->
+    <!-- TODO: skipped element version -->
+    <!-- TODO: skipped element default-resource-name -->
+    <entity entity-name="ProdCatalog" package="org.apache.ofbiz.product.catalog">
+        <field name="prodCatalogId" type="id" is-pk="true"></field>
+        <field name="catalogName" type="text-medium"></field>
+        <field name="useQuickAdd" type="text-indicator"></field>
+        <field name="styleSheet" type="text-intermediate"></field>
+        <field name="headerLogo" type="text-intermediate"></field>
+        <field name="contentPathPrefix" type="text-medium"></field>
+        <field name="templatePathPrefix" type="text-medium"></field>
+        <field name="viewAllowPermReqd" type="text-indicator"></field>
+        <field name="purchaseAllowPermReqd" type="text-indicator"></field>
+    </entity>
+    <entity entity-name="ProdCatalogCategory" package="org.apache.ofbiz.product.catalog">
+        <field name="prodCatalogId" type="id" is-pk="true"></field>
+        <field name="productCategoryId" type="id" is-pk="true"></field>
+        <field name="prodCatalogCategoryTypeId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <relationship type="one" fk-name="PROD_CC_CATALOG" related="org.apache.ofbiz.product.catalog.ProdCatalog">
+            <key-map field-name="prodCatalogId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CC_CATEGORY" related="org.apache.ofbiz.product.category.ProductCategory">
+            <key-map field-name="productCategoryId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CC_TYPE" related="org.apache.ofbiz.product.catalog.ProdCatalogCategoryType">
+            <key-map field-name="prodCatalogCategoryTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProdCatalogCategoryType" package="org.apache.ofbiz.product.catalog">
+        <field name="prodCatalogCategoryTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="PROD_PCCT_TYPEPAR" title="Parent" related="org.apache.ofbiz.product.catalog.ProdCatalogCategoryType">
+            <key-map field-name="parentTypeId" related="prodCatalogCategoryTypeId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductCategory" package="org.apache.ofbiz.product.category">
+        <field name="productCategoryId" type="id" is-pk="true"></field>
+        <field name="externalId" type="id-long"><description>This field stores product category ID of the external system</description></field>
+        <field name="productCategoryTypeId" type="id"></field>
+        <field name="primaryParentCategoryId" type="id"></field>
+        <field name="categoryName" type="text-medium"></field>
+        <field name="description" type="text-medium"></field>
+        <field name="longDescription" type="text-very-long"></field>
+        <field name="categoryImageUrl" type="text-intermediate"></field>
+        <field name="linkOneImageUrl" type="text-intermediate"></field>
+        <field name="linkTwoImageUrl" type="text-intermediate"></field>
+        <field name="detailScreen" type="text-medium"></field>
+        <field name="showInSelect" type="text-indicator"></field>
+        <relationship type="one" fk-name="PROD_CTGRY_TYPE" related="org.apache.ofbiz.product.category.ProductCategoryType">
+            <key-map field-name="productCategoryTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CTGRY_PARENT" title="PrimaryParent" related="org.apache.ofbiz.product.category.ProductCategory">
+            <key-map field-name="primaryParentCategoryId" related="productCategoryId"/>
+        </relationship>
+        <relationship type="many" title="PrimaryChild" related="org.apache.ofbiz.product.category.ProductCategory">
+            <key-map field-name="productCategoryId" related="primaryParentCategoryId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductCategoryContent" package="org.apache.ofbiz.product.category">
+        <field name="productCategoryId" type="id" is-pk="true"></field>
+        <field name="contentId" type="id" is-pk="true"></field>
+        <field name="prodCatContentTypeId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="purchaseFromDate" type="date-time"></field>
+        <field name="purchaseThruDate" type="date-time"></field>
+        <field name="useCountLimit" type="number-integer"></field>
+        <field name="useDaysLimit" type="number-decimal"></field>
+        <relationship type="one" fk-name="PRDCAT_CNT_PRDCAT" related="org.apache.ofbiz.product.category.ProductCategory">
+            <key-map field-name="productCategoryId"/>
+        </relationship>
+        <relationship type="one" fk-name="PRDCAT_CNT_CNT" related="org.apache.ofbiz.content.content.Content">
+            <key-map field-name="contentId"/>
+        </relationship>
+        <relationship type="one" fk-name="PRDCAT_CNT_TYPE" related="org.apache.ofbiz.product.category.ProductCategoryContentType">
+            <key-map field-name="prodCatContentTypeId"/>
+        </relationship>
+        <index name="PRDCAT_CNT_CTTP">
+            <index-field name="productCategoryId"/>
+            <index-field name="prodCatContentTypeId"/>
+        </index>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductCategoryContentType" package="org.apache.ofbiz.product.category">
+        <field name="prodCatContentTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="PRDCATCNT_TYP_PAR" title="Parent" related="org.apache.ofbiz.product.category.ProductCategoryContentType">
+            <key-map field-name="parentTypeId" related="prodCatContentTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductCategoryMember" package="org.apache.ofbiz.product.category">
+        <field name="productCategoryId" type="id" is-pk="true"></field>
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="comments" type="text-medium"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <field name="quantity" type="number-decimal"></field>
+        <relationship type="one" fk-name="PROD_CMBR_PRODUCT" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CMBR_CATEGORY" related="org.apache.ofbiz.product.category.ProductCategory">
+            <key-map field-name="productCategoryId"/>
+        </relationship>
+        <index name="PRD_CMBR_PCT">
+            <index-field name="productCategoryId"/>
+        </index>
+    </entity>
+    <entity entity-name="ProductCategoryRollup" package="org.apache.ofbiz.product.category">
+        <field name="productCategoryId" type="id" is-pk="true"></field>
+        <field name="parentProductCategoryId" type="id" is-pk="true"><description>The parent category; it should be one of productCategoryId already setup in ProductCategory or ProductCategoryRollup</description></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <relationship type="one" fk-name="PROD_CRLP_CURRENT" title="Current" related="org.apache.ofbiz.product.category.ProductCategory">
+            <key-map field-name="productCategoryId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CRLP_PARENT" title="Parent" related="org.apache.ofbiz.product.category.ProductCategory">
+            <key-map field-name="parentProductCategoryId" related="productCategoryId"/>
+        </relationship>
+        <relationship type="many" title="Child" related="org.apache.ofbiz.product.category.ProductCategoryRollup">
+            <key-map field-name="productCategoryId" related="parentProductCategoryId"/>
+        </relationship>
+        <relationship type="many" title="Parent" related="org.apache.ofbiz.product.category.ProductCategoryRollup">
+            <key-map field-name="parentProductCategoryId" related="productCategoryId"/>
+        </relationship>
+        <relationship type="many" title="Sibling" related="org.apache.ofbiz.product.category.ProductCategoryRollup">
+            <key-map field-name="parentProductCategoryId"/>
+        </relationship>
+        <index name="PRDCR_PARPC">
+            <index-field name="parentProductCategoryId"/>
+        </index>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductCategoryType" package="org.apache.ofbiz.product.category">
+        <field name="productCategoryTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="PROD_CTGRY_TYPEPAR" title="Parent" related="org.apache.ofbiz.product.category.ProductCategoryType">
+            <key-map field-name="parentTypeId" related="productCategoryTypeId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="Facility" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="facilityTypeId" type="id"></field>
+        <field name="parentFacilityId" type="id"></field>
+        <field name="ownerPartyId" type="id"></field>
+        <field name="defaultInventoryItemTypeId" type="id"></field>
+        <field name="facilityName" type="text-medium"></field>
+        <field name="primaryFacilityGroupId" type="id"></field>
+        <field name="oldSquareFootage" type="number-integer" column-name="SQUARE_FOOTAGE"></field>
+        <field name="facilitySize" type="number-decimal"></field>
+        <field name="facilitySizeUomId" type="id"></field>
+        <field name="productStoreId" type="id"></field>
+        <field name="defaultDaysToShip" type="number-integer"><description>In the absence of a product specific days to ship in ProductFacility, this will be used</description></field>
+        <field name="openedDate" type="date-time"></field>
+        <field name="closedDate" type="date-time" enable-audit-log="true"></field>
+        <field name="description" type="text-medium"></field>
+        <field name="defaultDimensionUomId" type="id"><description>This field store the unit of measurement of dimension (length, width and height)</description></field>
+        <field name="defaultWeightUomId" type="id"></field>
+        <field name="geoPointId" type="id"></field>
+        <field name="externalId" type="id-long"><description>This field stores facility ID of the external system</description></field>
+        <relationship type="one" fk-name="FACILITY_FCTYP" related="org.apache.ofbiz.product.facility.FacilityType">
+            <key-map field-name="facilityTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_PARENT" title="Parent" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="parentFacilityId" related="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_PGRP" related="org.apache.ofbiz.product.facility.FacilityGroup">
+            <key-map field-name="primaryFacilityGroupId" related="facilityGroupId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_OWNER" title="Owner" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="ownerPartyId" related="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="FAC_INVITM_TYPE" title="Default" related="org.apache.ofbiz.product.inventory.InventoryItemType">
+            <key-map field-name="defaultInventoryItemTypeId" related="inventoryItemTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="FAC_DEF_DUOM" title="Dimension" related="moqui.basic.Uom">
+            <key-map field-name="defaultDimensionUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="FAC_DEF_WUOM" title="Weight" related="moqui.basic.Uom">
+            <key-map field-name="defaultWeightUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.product.store.ProductStore">
+<description>this was changed from the FK to better handle syncronization; this may be set back to be a FK in the future</description>            <key-map field-name="productStoreId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_GEOPT" related="moqui.basic.GeoPoint">
+            <key-map field-name="geoPointId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_SUOM" title="FacilitySize" related="moqui.basic.Uom">
+            <key-map field-name="facilitySizeUomId" related="uomId"/>
+        </relationship>
+        <index name="EXT_FAC_ID_INDX">
+            <index-field name="externalId"/>
+        </index>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="FacilityAttribute" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="attrName" type="id-long" is-pk="true"></field>
+        <field name="attrValue" type="text-medium"></field>
+        <field name="attrDescription" type="text-medium"></field>
+        <relationship type="one" fk-name="FACILITY_ATTR" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="FacilityCalendar" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="calendarId" type="id" is-pk="true"></field>
+        <field name="facilityCalendarTypeId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <relationship type="one" fk-name="FACILITY_CAL_FAC" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="many" fk-name="FACILITY_TEC_CAL" related="org.apache.ofbiz.manufacturing.techdata.TechDataCalendar">
+            <key-map field-name="calendarId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_CAL_TYPE" related="org.apache.ofbiz.product.facility.FacilityCalendarType">
+            <key-map field-name="facilityCalendarTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="FacilityCalendarType" package="org.apache.ofbiz.product.facility">
+        <field name="facilityCalendarTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="description" type="text-medium"></field>
+    </entity>
+    <entity entity-name="FacilityCarrierShipment" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="partyId" type="id" is-pk="true"></field>
+        <field name="roleTypeId" type="id" is-pk="true"></field>
+        <field name="shipmentMethodTypeId" type="id" is-pk="true"></field>
+        <relationship type="one" fk-name="FACILITY_CSH_PTY" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_CSH_FAC" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_CSH_STP" related="org.apache.ofbiz.shipment.shipment.ShipmentMethodType">
+            <key-map field-name="shipmentMethodTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_CSH_CSM" related="org.apache.ofbiz.shipment.shipment.CarrierShipmentMethod">
+            <key-map field-name="shipmentMethodTypeId"/>
+            <key-map field-name="partyId"/>
+            <key-map field-name="roleTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="FacilityContactMech" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true" enable-audit-log="true"></field>
+        <field name="contactMechId" type="id" is-pk="true" enable-audit-log="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time" enable-audit-log="true"></field>
+        <field name="extension" type="text-short"></field>
+        <field name="comments" type="text-medium"></field>
+        <relationship type="one" fk-name="FACIL_CMECH_FACIL" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACIL_CMECH_CMECH" related="org.apache.ofbiz.party.contact.ContactMech">
+            <key-map field-name="contactMechId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.party.contact.TelecomNumber">
+            <key-map field-name="contactMechId"/>
+        </relationship>
+        <relationship type="many" related="org.apache.ofbiz.product.facility.FacilityContactMechPurpose">
+            <key-map field-name="facilityId"/>
+            <key-map field-name="contactMechId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="FacilityContactMechPurpose" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="contactMechId" type="id" is-pk="true"></field>
+        <field name="contactMechPurposeTypeId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <relationship type="many" related="org.apache.ofbiz.product.facility.FacilityContactMech">
+            <key-map field-name="facilityId"/>
+            <key-map field-name="contactMechId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACIL_CMPRP_TYPE" related="org.apache.ofbiz.party.contact.ContactMechPurposeType">
+            <key-map field-name="contactMechPurposeTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACIL_CMPRP_FACIL" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACIL_CMPRP_CMECH" related="org.apache.ofbiz.party.contact.ContactMech">
+            <key-map field-name="contactMechId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="FacilityGroup" package="org.apache.ofbiz.product.facility">
+        <field name="facilityGroupId" type="id" is-pk="true"></field>
+        <field name="facilityGroupTypeId" type="id"></field>
+        <field name="primaryParentGroupId" type="id"></field>
+        <field name="facilityGroupName" type="text-medium"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="FACILITY_GP_TYPE" related="org.apache.ofbiz.product.facility.FacilityGroupType">
+            <key-map field-name="facilityGroupTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_GP_PGRP" title="PrimaryParent" related="org.apache.ofbiz.product.facility.FacilityGroup">
+            <key-map field-name="primaryParentGroupId" related="facilityGroupId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="FacilityGroupMember" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="facilityGroupId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <relationship type="one" fk-name="FACILITY_MEM_FAC" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_MEM_FGRP" related="org.apache.ofbiz.product.facility.FacilityGroup">
+            <key-map field-name="facilityGroupId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="FacilityGroupType" package="org.apache.ofbiz.product.facility">
+        <field name="facilityGroupTypeId" type="id" is-pk="true"></field>
+        <field name="description" type="text-medium"></field>
+    </entity>
+    <entity entity-name="FacilityLocation" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="locationSeqId" type="id-long" is-pk="true"></field>
+        <field name="locationTypeEnumId" type="id"></field>
+        <field name="areaId" type="id"></field>
+        <field name="aisleId" type="id"></field>
+        <field name="sectionId" type="id"></field>
+        <field name="levelId" type="id"></field>
+        <field name="positionId" type="id"></field>
+        <field name="geoPointId" type="id"></field>
+        <relationship type="one" fk-name="FACILITY_LOC_FAC" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_LOC_TENM" title="Type" related="moqui.basic.Enumeration">
+            <key-map field-name="locationTypeEnumId" related="enumId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_LOC_GEOPT" related="moqui.basic.GeoPoint">
+            <key-map field-name="geoPointId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="FacilityParty" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="partyId" type="id" is-pk="true"></field>
+        <field name="roleTypeId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <relationship type="one" fk-name="FACILITY_RLE_FACI" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_RLE_PRT" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="FACILITY_RLE_ROL" related="org.apache.ofbiz.party.party.RoleType">
+            <key-map field-name="roleTypeId"/>
+        </relationship>
+        <index name="FACILITY_PRTY_ROLE">
+            <index-field name="partyId"/>
+            <index-field name="roleTypeId"/>
+        </index>
+    </entity>
+    <entity entity-name="FacilityContent" package="org.apache.ofbiz.product.facility">
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="contentId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <relationship type="one" fk-name="FAC_CNT_FAC" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="FAC_CNT_CNT" related="org.apache.ofbiz.content.content.Content">
+            <key-map field-name="contentId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="FacilityType" package="org.apache.ofbiz.product.facility">
+        <field name="facilityTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="FACILITY_TYPEPAR" title="Parent" related="org.apache.ofbiz.product.facility.FacilityType">
+            <key-map field-name="parentTypeId" related="facilityTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductFacility" package="org.apache.ofbiz.product.facility">
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="minimumStock" type="number-decimal"></field>
+        <field name="reorderQuantity" type="number-decimal"></field>
+        <field name="daysToShip" type="number-integer"></field>
+        <field name="lastInventoryCount" type="number-decimal"><description>This field represents availableToPromiseTotal of a product at a certain point of time and is being updated regularly by a schedule service every hour</description></field>
+        <relationship type="one" fk-name="PROD_FAC_PROD" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_FAC_FAC" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductFacilityLocation" package="org.apache.ofbiz.product.facility">
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="locationSeqId" type="id-long" is-pk="true"></field>
+        <field name="minimumStock" type="number-decimal"></field>
+        <field name="moveQuantity" type="number-decimal"></field>
+        <relationship type="one" fk-name="PROD_FCL_PROD" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_FCL_FCL" related="org.apache.ofbiz.product.facility.FacilityLocation">
+            <key-map field-name="facilityId"/>
+            <key-map field-name="locationSeqId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductFeature" package="org.apache.ofbiz.product.feature">
+        <field name="productFeatureId" type="id" is-pk="true"></field>
+        <field name="productFeatureTypeId" type="id"></field>
+        <field name="productFeatureCategoryId" type="id"></field>
+        <field name="description" type="text-medium"></field>
+        <field name="uomId" type="id"></field>
+        <field name="numberSpecified" type="number-decimal"></field>
+        <field name="defaultAmount" type="currency-amount"></field>
+        <field name="defaultSequenceNum" type="number-integer"></field>
+        <field name="abbrev" type="id"></field>
+        <field name="idCode" type="id-long"></field>
+        <relationship type="one" fk-name="PROD_FEAT_TYPE" related="org.apache.ofbiz.product.feature.ProductFeatureType">
+            <key-map field-name="productFeatureTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_FEAT_UOM" related="moqui.basic.Uom">
+            <key-map field-name="uomId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductFeatureAppl" package="org.apache.ofbiz.product.feature">
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="productFeatureId" type="id" is-pk="true"></field>
+        <field name="productFeatureApplTypeId" type="id"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <field name="amount" type="currency-amount"></field>
+        <field name="recurringAmount" type="currency-amount"></field>
+        <relationship type="one" fk-name="PROD_FAPPL_TYPE" related="org.apache.ofbiz.product.feature.ProductFeatureApplType">
+            <key-map field-name="productFeatureApplTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_FAPPL_PRODUCT" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_FAPPL_FEATURE" related="org.apache.ofbiz.product.feature.ProductFeature">
+            <key-map field-name="productFeatureId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductFeatureApplType" package="org.apache.ofbiz.product.feature">
+        <field name="productFeatureApplTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="PROD_FAPPL_TYPPAR" title="Parent" related="org.apache.ofbiz.product.feature.ProductFeatureApplType">
+            <key-map field-name="parentTypeId" related="productFeatureApplTypeId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductFeatureType" package="org.apache.ofbiz.product.feature">
+        <field name="productFeatureTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="PROD_FEAT_TYPPAR" title="Parent" related="org.apache.ofbiz.product.feature.ProductFeatureType">
+            <key-map field-name="parentTypeId" related="productFeatureTypeId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="InventoryItem" package="org.apache.ofbiz.product.inventory">
+        <field name="inventoryItemId" type="id" is-pk="true"></field>
+        <field name="inventoryItemTypeId" type="id"></field>
+        <field name="productId" type="id"></field>
+        <field name="partyId" type="id"></field>
+        <field name="ownerPartyId" type="id"><description>The owner of the inventory item.</description></field>
+        <field name="statusId" type="id"></field>
+        <field name="datetimeReceived" type="date-time"></field>
+        <field name="datetimeManufactured" type="date-time"></field>
+        <field name="expireDate" type="date-time"></field>
+        <field name="facilityId" type="id"></field>
+        <field name="containerId" type="id"></field>
+        <field name="lotId" type="id"></field>
+        <field name="uomId" type="id"></field>
+        <field name="binNumber" type="id"></field>
+        <field name="locationSeqId" type="id-long"></field>
+        <field name="comments" type="text-medium"></field>
+        <field name="quantityOnHandTotal" type="number-decimal"></field>
+        <field name="availableToPromiseTotal" type="number-decimal"></field>
+        <field name="accountingQuantityTotal" type="number-decimal"></field>
+        <field name="oldQuantityOnHand" type="number-decimal" column-name="QUANTITY_ON_HAND"></field>
+        <field name="oldAvailableToPromise" type="number-decimal" column-name="AVAILABLE_TO_PROMISE"></field>
+        <field name="serialNumber" type="text-medium"></field>
+        <field name="softIdentifier" type="text-medium"></field>
+        <field name="activationNumber" type="text-medium"></field>
+        <field name="activationValidThru" type="date-time"></field>
+        <field name="unitCost" type="number-decimal"><description>Higher precision in case it is a calculated number</description></field>
+        <field name="currencyUomId" type="id"><description>The currency Uom of the unit cost.</description></field>
+        <field name="fixedAssetId" type="id"></field>
+        <relationship type="one" fk-name="INV_ITEM_TYPE" related="org.apache.ofbiz.product.inventory.InventoryItemType">
+            <key-map field-name="inventoryItemTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_PRODUCT" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_PARTY" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_OWNPARTY" title="Owner" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="ownerPartyId" related="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_STTSITM" related="moqui.basic.StatusItem">
+            <key-map field-name="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_FACILITY" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_LOT" related="org.apache.ofbiz.product.inventory.Lot">
+            <key-map field-name="lotId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.product.facility.ProductFacility">
+            <key-map field-name="productId"/>
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.product.facility.FacilityLocation">
+            <key-map field-name="facilityId"/>
+            <key-map field-name="locationSeqId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.product.facility.ProductFacilityLocation">
+            <key-map field-name="productId"/>
+            <key-map field-name="facilityId"/>
+            <key-map field-name="locationSeqId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_UOM" related="moqui.basic.Uom">
+            <key-map field-name="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_CUOM" title="Currency" related="moqui.basic.Uom">
+            <key-map field-name="currencyUomId" related="uomId"/>
+        </relationship>
+        <index name="INVITEM_SOFID" unique="true">
+            <index-field name="softIdentifier"/>
+        </index>
+        <index name="INVITEM_ACTNM" unique="true">
+            <index-field name="activationNumber"/>
+        </index>
+        <index name="INV_ITEM_SN">
+            <index-field name="serialNumber"/>
+        </index>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="InventoryItemDetail" package="org.apache.ofbiz.product.inventory">
+        <field name="inventoryItemId" type="id" is-pk="true"></field>
+        <field name="inventoryItemDetailSeqId" type="id" is-pk="true"></field>
+        <field name="effectiveDate" type="date-time"></field>
+        <field name="quantityOnHandDiff" type="number-decimal"></field>
+        <field name="availableToPromiseDiff" type="number-decimal"></field>
+        <field name="accountingQuantityDiff" type="number-decimal"></field>
+        <field name="lastQuantityOnHand" type="number-decimal"></field>
+        <field name="lastAvailableToPromise" type="number-decimal"></field>
+        <field name="unitCost" type="number-decimal"></field>
+        <field name="orderId" type="id"></field>
+        <field name="orderItemSeqId" type="id"></field>
+        <field name="shipGroupSeqId" type="id"></field>
+        <field name="shipmentId" type="id"></field>
+        <field name="shipmentItemSeqId" type="id"></field>
+        <field name="returnId" type="id"></field>
+        <field name="returnItemSeqId" type="id"></field>
+        <field name="workEffortId" type="id"></field>
+        <field name="fixedAssetId" type="id"></field>
+        <field name="maintHistSeqId" type="id"></field>
+        <field name="itemIssuanceId" type="id"></field>
+        <field name="receiptId" type="id"></field>
+        <field name="physicalInventoryId" type="id"></field>
+        <field name="reasonEnumId" type="id"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="INV_ITDTL_INVIT" related="org.apache.ofbiz.product.inventory.InventoryItem">
+            <key-map field-name="inventoryItemId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.order.order.OrderItemShipGrpInvRes">
+            <key-map field-name="orderId"/>
+            <key-map field-name="orderItemSeqId"/>
+            <key-map field-name="shipGroupSeqId"/>
+            <key-map field-name="inventoryItemId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITDTL_ITMIS" related="org.apache.ofbiz.shipment.issuance.ItemIssuance">
+            <key-map field-name="itemIssuanceId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITDTL_SHRCT" related="org.apache.ofbiz.shipment.receipt.ShipmentReceipt">
+            <key-map field-name="receiptId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITDTL_PHINV" related="org.apache.ofbiz.product.inventory.PhysicalInventory">
+            <key-map field-name="physicalInventoryId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITDTL_REAS" title="Reason" related="moqui.basic.Enumeration">
+            <key-map field-name="reasonEnumId" related="enumId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.product.inventory.InventoryItemVariance">
+            <key-map field-name="inventoryItemId"/>
+            <key-map field-name="physicalInventoryId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="InventoryItemStatus" package="org.apache.ofbiz.product.inventory">
+        <field name="inventoryItemId" type="id" is-pk="true"></field>
+        <field name="statusId" type="id" is-pk="true"></field>
+        <field name="statusDatetime" type="date-time" is-pk="true"></field>
+        <field name="statusEndDatetime" type="date-time"></field>
+        <field name="changeByUserLoginId" type="id-long"></field>
+        <field name="ownerPartyId" type="id"><description>Used to track a changed (new) ownerPartyId as a status changes.</description></field>
+        <field name="productId" type="id"><description>Used to track a changed (new) productId as a status changes. In other words over time the item may be represented by a different Product (like new versus refurbished).</description></field>
+        <relationship type="one" fk-name="INV_ITEM_STTS_II" related="org.apache.ofbiz.product.inventory.InventoryItem">
+            <key-map field-name="inventoryItemId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_STTS_SI" related="moqui.basic.StatusItem">
+            <key-map field-name="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_STTS_USER" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="changeByUserLoginId" related="userLoginId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="InventoryItemType" package="org.apache.ofbiz.product.inventory">
+        <field name="inventoryItemTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="INV_ITEM_TYPPAR" title="Parent" related="org.apache.ofbiz.product.inventory.InventoryItemType">
+            <key-map field-name="parentTypeId" related="inventoryItemTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="InventoryItemVariance" package="org.apache.ofbiz.product.inventory">
+        <field name="inventoryItemId" type="id" is-pk="true"></field>
+        <field name="physicalInventoryId" type="id" is-pk="true"></field>
+        <field name="varianceReasonId" type="id"></field>
+        <field name="availableToPromiseVar" type="number-decimal"></field>
+        <field name="quantityOnHandVar" type="number-decimal"></field>
+        <field name="comments" type="text-medium"></field>
+        <field name="changeByUserLoginId" type="id-long"></field>
+        <relationship type="one" fk-name="INV_ITEM_VAR_PINV" related="org.apache.ofbiz.product.inventory.PhysicalInventory">
+            <key-map field-name="physicalInventoryId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_VAR_RSN" related="org.apache.ofbiz.product.inventory.VarianceReason">
+            <key-map field-name="varianceReasonId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_ITEM_VAR_ITEM" related="org.apache.ofbiz.product.inventory.InventoryItem">
+            <key-map field-name="inventoryItemId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="InventoryTransfer" package="org.apache.ofbiz.product.inventory">
+        <field name="inventoryTransferId" type="id" is-pk="true"></field>
+        <field name="statusId" type="id"></field>
+        <field name="inventoryItemId" type="id"></field>
+        <field name="facilityId" type="id"></field>
+        <field name="locationSeqId" type="id-long"></field>
+        <field name="containerId" type="id"></field>
+        <field name="facilityIdTo" type="id"></field>
+        <field name="locationSeqIdTo" type="id-long"></field>
+        <field name="containerIdTo" type="id"></field>
+        <field name="itemIssuanceId" type="id"></field>
+        <field name="sendDate" type="date-time"></field>
+        <field name="receiveDate" type="date-time"></field>
+        <field name="comments" type="text-medium"></field>
+        <relationship type="one" fk-name="INV_XFER_ITEM" related="org.apache.ofbiz.product.inventory.InventoryItem">
+            <key-map field-name="inventoryItemId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_XFER_STTS" related="moqui.basic.StatusItem">
+            <key-map field-name="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_XFER_FAC" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.product.facility.FacilityLocation">
+            <key-map field-name="facilityId"/>
+            <key-map field-name="locationSeqId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_XFER_TFAC" title="To" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityIdTo" related="facilityId"/>
+        </relationship>
+        <relationship type="one-nofk" title="To" related="org.apache.ofbiz.product.facility.FacilityLocation">
+            <key-map field-name="facilityIdTo" related="facilityId"/>
+            <key-map field-name="locationSeqIdTo" related="locationSeqId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_XFER_ISSU" related="org.apache.ofbiz.shipment.issuance.ItemIssuance">
+            <key-map field-name="itemIssuanceId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="Lot" package="org.apache.ofbiz.product.inventory">
+        <field name="lotId" type="id" is-pk="true"></field>
+        <field name="creationDate" type="date-time"></field>
+        <field name="quantity" type="number-decimal"></field>
+        <field name="expirationDate" type="date-time"></field>
+    </entity>
+    <entity entity-name="PhysicalInventory" package="org.apache.ofbiz.product.inventory">
+        <field name="physicalInventoryId" type="id" is-pk="true"></field>
+        <field name="physicalInventoryDate" type="date-time"></field>
+        <field name="partyId" type="id"></field>
+        <field name="generalComments" type="text-medium"></field>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="VarianceReason" package="org.apache.ofbiz.product.inventory">
+        <field name="varianceReasonId" type="id" is-pk="true"></field>
+        <field name="description" type="text-medium"></field>
+    </entity>
+    <entity entity-name="ProductPrice" package="org.apache.ofbiz.product.price">
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="productPriceTypeId" type="id" is-pk="true"></field>
+        <field name="productPricePurposeId" type="id" is-pk="true"></field>
+        <field name="currencyUomId" type="id" is-pk="true"></field>
+        <field name="productStoreGroupId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="price" type="currency-precise"></field>
+        <field name="termUomId" type="id"><description>Mainly used for recurring and usage prices to specify a time/freq measure, or a usage unit measure (bits, minutes, etc)</description></field>
+        <field name="customPriceCalcService" type="id"><description>Points to a CustomMethod used to specify a service for the calculation of the unit price of the product (NOTE: a better name for this field might be priceCalcCustomMethodId)</description></field>
+        <field name="priceWithoutTax" type="currency-precise"><description>Always without tax if populated, regardless of if price does or does not include tax.</description></field>
+        <field name="priceWithTax" type="currency-precise"><description>Always with tax if populated, regardless of if price does or does not include tax.</description></field>
+        <field name="taxAmount" type="currency-precise"></field>
+        <field name="taxPercentage" type="number-decimal"></field>
+        <field name="taxAuthPartyId" type="id"></field>
+        <field name="taxAuthGeoId" type="id"></field>
+        <field name="taxInPrice" type="text-indicator"><description>If Y the price field has tax included for the given taxAuthPartyId/taxAuthGeoId at the taxPercentage.</description></field>
+        <field name="createdDate" type="date-time"></field>
+        <field name="createdByUserLogin" type="id-long"></field>
+        <field name="lastModifiedDate" type="date-time"></field>
+        <field name="lastModifiedByUserLogin" type="id-long"></field>
+        <relationship type="one" fk-name="PROD_PRICE_PROD" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_PRICE_CUOM" title="Currency" related="moqui.basic.Uom">
+            <key-map field-name="currencyUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_PRICE_TUOM" title="Term" related="moqui.basic.Uom">
+            <key-map field-name="termUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_PRC_TAXPTY" title="TaxAuthority" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="taxAuthPartyId" related="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_PRC_TAXGEO" title="TaxAuthority" related="moqui.basic.Geo">
+            <key-map field-name="taxAuthGeoId" related="geoId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_PRICE_CBUL" title="CreatedBy" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="createdByUserLogin" related="userLoginId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_PRICE_LMBUL" title="LastModifiedBy" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="lastModifiedByUserLogin" related="userLoginId"/>
+        </relationship>
+        <index name="PRD_PRC_GENLKP">
+            <index-field name="productId"/>
+            <index-field name="productPricePurposeId"/>
+            <index-field name="currencyUomId"/>
+            <index-field name="productStoreGroupId"/>
+        </index>
+    </entity>
+    <entity entity-name="GoodIdentification" package="org.apache.ofbiz.product.product">
+        <field name="goodIdentificationTypeId" type="id" is-pk="true"></field>
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="idValue" type="id-long" enable-audit-log="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <relationship type="one" fk-name="GOOD_ID_TYPE" related="org.apache.ofbiz.product.product.GoodIdentificationType">
+            <key-map field-name="goodIdentificationTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="GOOD_ID_PRODICT" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <index name="GOOD_ID_VALIDX" unique="false">
+            <index-field name="idValue"/>
+        </index>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="GoodIdentificationType" package="org.apache.ofbiz.product.product">
+        <field name="goodIdentificationTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="GOOD_ID_TYPE_PAR" title="Parent" related="org.apache.ofbiz.product.product.GoodIdentificationType">
+            <key-map field-name="parentTypeId" related="goodIdentificationTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="Product" package="org.apache.ofbiz.product.product">
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="productTypeId" type="id"></field>
+        <field name="primaryProductCategoryId" type="id"><description>The primary category ; it should be one of the productCategoryId already setup in ProductCategoryMember</description></field>
+        <field name="facilityId" type="id"></field>
+        <field name="introductionDate" type="date-time"></field>
+        <field name="releaseDate" type="date-time"></field>
+        <field name="supportDiscontinuationDate" type="date-time"></field>
+        <field name="salesDiscontinuationDate" type="date-time"></field>
+        <field name="salesDiscWhenNotAvail" type="text-indicator"></field>
+        <field name="internalName" type="text-medium"></field>
+        <field name="brandName" type="text-medium"></field>
+        <field name="comments" type="text-medium"></field>
+        <field name="productName" type="text-medium"></field>
+        <field name="description" type="text-medium"></field>
+        <field name="longDescription" type="text-very-long"></field>
+        <field name="priceDetailText" type="text-medium"></field>
+        <field name="smallImageUrl" type="text-intermediate"></field>
+        <field name="mediumImageUrl" type="text-intermediate"></field>
+        <field name="largeImageUrl" type="text-intermediate"></field>
+        <field name="detailImageUrl" type="text-intermediate"></field>
+        <field name="originalImageUrl" type="text-intermediate"></field>
+        <field name="detailScreen" type="text-medium"></field>
+        <field name="inventoryMessage" type="text-medium"></field>
+        <field name="inventoryItemTypeId" type="id"></field>
+        <field name="requireInventory" type="text-indicator"></field>
+        <field name="quantityUomId" type="id"></field>
+        <field name="quantityIncluded" type="number-decimal"><description>If you have a six-pack of 12oz soda cans you would have quantityIncluded=12, quantityUomId=oz, piecesIncluded=6.</description></field>
+        <field name="piecesIncluded" type="number-integer"></field>
+        <field name="requireAmount" type="text-indicator"></field>
+        <field name="fixedAmount" type="currency-amount"><description>Use this for products which are sold in fixed denominations, such as gift certificates or calling cards.</description></field>
+        <field name="amountUomTypeId" type="id"></field>
+        <field name="weightUomId" type="id"></field>
+        <field name="shippingWeight" type="number-decimal"><description>The shipping weight of the product.</description></field>
+        <field name="productWeight" type="number-decimal"></field>
+        <field name="heightUomId" type="id"></field>
+        <field name="productHeight" type="number-decimal"></field>
+        <field name="shippingHeight" type="number-decimal"></field>
+        <field name="widthUomId" type="id"></field>
+        <field name="productWidth" type="number-decimal"></field>
+        <field name="shippingWidth" type="number-decimal"></field>
+        <field name="depthUomId" type="id"></field>
+        <field name="productDepth" type="number-decimal"></field>
+        <field name="shippingDepth" type="number-decimal"></field>
+        <field name="diameterUomId" type="id"></field>
+        <field name="productDiameter" type="number-decimal"></field>
+        <field name="productRating" type="number-decimal"></field>
+        <field name="ratingTypeEnum" type="id"></field>
+        <field name="returnable" type="text-indicator"></field>
+        <field name="taxable" type="text-indicator"></field>
+        <field name="chargeShipping" type="text-indicator"></field>
+        <field name="autoCreateKeywords" type="text-indicator"></field>
+        <field name="includeInPromotions" type="text-indicator"></field>
+        <field name="isVirtual" type="text-indicator"></field>
+        <field name="isVariant" type="text-indicator"></field>
+        <field name="virtualVariantMethodEnum" type="id"><description>This field defines the method of selecting a variant from the selectable features on the virtual product. Either as a variant explosion which will work to about 200 variants or as feature explosion which almost has no limits</description></field>
+        <field name="originGeoId" type="id"></field>
+        <field name="requirementMethodEnumId" type="id"></field>
+        <field name="billOfMaterialLevel" type="number-integer"></field>
+        <field name="reservMaxPersons" type="number-decimal"><description>maximum number of persons who can rent this asset at the same time</description></field>
+        <field name="reserv2ndPPPerc" type="number-decimal"><description>percentage of the end price for the 2nd person renting this asset connected to this product</description></field>
+        <field name="reservNthPPPerc" type="number-decimal"><description>percentage of the end price for the Nth person renting this asset connected to this product</description></field>
+        <field name="configId" type="id"><description>Used to safe the persisted configuration Id for AGGREGATED products.</description></field>
+        <field name="createdDate" type="date-time"></field>
+        <field name="createdByUserLogin" type="id-long"></field>
+        <field name="lastModifiedDate" type="date-time"></field>
+        <field name="lastModifiedByUserLogin" type="id-long"></field>
+        <field name="inShippingBox" type="text-indicator"></field>
+        <field name="defaultShipmentBoxTypeId" type="id"></field>
+        <field name="lotIdFilledIn" type="text-medium"><description>Indicate if the lotId must be informed</description></field>
+        <field name="orderDecimalQuantity" type="text-indicator"><description>use to indicate if decimal quantity can be ordered for this product. Default value is Y</description></field>
+        <relationship type="one" fk-name="PROD_TYPE" related="org.apache.ofbiz.product.product.ProductType">
+            <key-map field-name="productTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_PRIMARY_CAT" title="Primary" related="org.apache.ofbiz.product.category.ProductCategory">
+            <key-map field-name="primaryProductCategoryId" related="productCategoryId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_FACILITY" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_QUANT_UOM" title="Quantity" related="moqui.basic.Uom">
+            <key-map field-name="quantityUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_WEIGHT_UOM" title="Weight" related="moqui.basic.Uom">
+            <key-map field-name="weightUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_HEIGHT_UOM" title="Height" related="moqui.basic.Uom">
+            <key-map field-name="heightUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_WIDTH_UOM" title="Width" related="moqui.basic.Uom">
+            <key-map field-name="widthUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_DEPTH_UOM" title="Depth" related="moqui.basic.Uom">
+            <key-map field-name="depthUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_DIAMTR_UOM" title="Diameter" related="moqui.basic.Uom">
+            <key-map field-name="diameterUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_VVMETHOD_ENUM" title="VirtualVariantMethod" related="moqui.basic.Enumeration">
+            <key-map field-name="virtualVariantMethodEnum" related="enumId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_RATE_ENUM" title="Rating" related="moqui.basic.Enumeration">
+            <key-map field-name="ratingTypeEnum" related="enumId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_RQMT_ENUM" title="RequirementMethod" related="moqui.basic.Enumeration">
+            <key-map field-name="requirementMethodEnumId" related="enumId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_ORG_GEO" title="Origin" related="moqui.basic.Geo">
+            <key-map field-name="originGeoId" related="geoId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CB_USERLOGIN" title="CreatedBy" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="createdByUserLogin" related="userLoginId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_LMB_USERLOGIN" title="LastModifiedBy" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="lastModifiedByUserLogin" related="userLoginId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_SHBX_TYPE" title="Default" related="org.apache.ofbiz.shipment.shipment.ShipmentBoxType">
+            <key-map field-name="defaultShipmentBoxTypeId" related="shipmentBoxTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_INV_ITEM_TYPE" related="org.apache.ofbiz.product.inventory.InventoryItemType">
+            <key-map field-name="inventoryItemTypeId" related="inventoryItemTypeId"/>
+        </relationship>
+        <index name="PROD_INTERNAL_NAME">
+            <index-field name="internalName"/>
+        </index>
+    </entity>
+    <entity entity-name="ProductAssoc" package="org.apache.ofbiz.product.product">
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="productIdTo" type="id" is-pk="true"></field>
+        <field name="productAssocTypeId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <field name="reason" type="text-medium"></field>
+        <field name="quantity" type="number-decimal"></field>
+        <field name="scrapFactor" type="number-decimal"></field>
+        <field name="instruction" type="text-medium"></field>
+        <field name="routingWorkEffortId" type="id"></field>
+        <field name="estimateCalcMethod" type="id"></field>
+        <field name="recurrenceInfoId" type="id"></field>
+        <relationship type="one" fk-name="PROD_ASSOC_TYPE" related="org.apache.ofbiz.product.product.ProductAssocType">
+            <key-map field-name="productAssocTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_ASSOC_MPROD" title="Main" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_ASSOC_APROD" title="Assoc" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productIdTo" related="productId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductAssocType" package="org.apache.ofbiz.product.product">
+        <field name="productAssocTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="PROD_ASSOC_TYPEPAR" title="Parent" related="org.apache.ofbiz.product.product.ProductAssocType">
+            <key-map field-name="parentTypeId" related="productAssocTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductAttribute" package="org.apache.ofbiz.product.product">
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="attrName" type="id-long" is-pk="true"></field>
+        <field name="attrValue" type="text-medium"></field>
+        <field name="attrType" type="text-medium"></field>
+        <field name="attrDescription" type="text-medium"></field>
+        <relationship type="one" fk-name="PROD_ATTR" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductContent" package="org.apache.ofbiz.product.product">
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="contentId" type="id" is-pk="true"></field>
+        <field name="productContentTypeId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="purchaseFromDate" type="date-time"></field>
+        <field name="purchaseThruDate" type="date-time"></field>
+        <field name="useCountLimit" type="number-integer"></field>
+        <field name="useTime" type="number-integer"></field>
+        <field name="useTimeUomId" type="id"></field>
+        <field name="useRoleTypeId" type="id"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <relationship type="one" fk-name="PROD_CNT_PROD" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CNT_CNT" related="org.apache.ofbiz.content.content.Content">
+            <key-map field-name="contentId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CNT_TYPE" related="org.apache.ofbiz.product.product.ProductContentType">
+            <key-map field-name="productContentTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CNT_URT" title="Use" related="org.apache.ofbiz.party.party.RoleType">
+            <key-map field-name="useRoleTypeId" related="roleTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_CNT_UTU" title="UseTime" related="moqui.basic.Uom">
+            <key-map field-name="useTimeUomId" related="uomId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductContentType" package="org.apache.ofbiz.product.product">
+        <field name="productContentTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="PRDCT_TYP_PARENT" title="Parent" related="org.apache.ofbiz.product.product.ProductContentType">
+            <key-map field-name="parentTypeId" related="productContentTypeId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductKeyword" package="org.apache.ofbiz.product.product" table-name="PRODUCT_KEYWORD_NEW" cache="never">
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="keyword" type="text-medium" is-pk="true"></field>
+        <field name="keywordTypeId" type="id" is-pk="true"></field>
+        <field name="relevancyWeight" type="number-integer"></field>
+        <field name="statusId" type="id"></field>
+        <relationship type="one" fk-name="PROD_KWD_PROD_NEW" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_KWD_TYPE" related="moqui.basic.Enumeration">
+            <key-map field-name="keywordTypeId" related="enumId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_KWD_STTS" related="moqui.basic.StatusItem">
+            <key-map field-name="statusId"/>
+        </relationship>
+        <index name="PROD_KWD_KWD_NEW">
+            <index-field name="keyword"/>
+        </index>
+    </entity>
+    <entity entity-name="ProductType" package="org.apache.ofbiz.product.product">
+        <field name="productTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="isPhysical" type="text-indicator"></field>
+        <field name="isDigital" type="text-indicator"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="PROD_TYPE_PARENT" title="Parent" related="org.apache.ofbiz.product.product.ProductType">
+            <key-map field-name="parentTypeId" related="productTypeId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductStore" package="org.apache.ofbiz.product.store">
+        <field name="productStoreId" type="id" is-pk="true"></field>
+        <field name="primaryStoreGroupId" type="id"></field>
+        <field name="storeName" type="text-medium"></field>
+        <field name="companyName" type="text-medium"></field>
+        <field name="title" type="text-medium"></field>
+        <field name="subtitle" type="text-medium"></field>
+        <field name="payToPartyId" type="id" enable-audit-log="true"><description>Note that this corresponds with the organizationPartyId that GL transactions will be posted to.</description></field>
+        <field name="daysToCancelNonPay" type="number-integer" enable-audit-log="true"></field>
+        <field name="manualAuthIsCapture" type="text-indicator" enable-audit-log="true"></field>
+        <field name="prorateShipping" type="text-indicator"></field>
+        <field name="prorateTaxes" type="text-indicator"></field>
+        <field name="viewCartOnAdd" type="text-indicator" enable-audit-log="true"></field>
+        <field name="autoSaveCart" type="text-indicator"></field>
+        <field name="autoApproveReviews" type="text-indicator" enable-audit-log="true"></field>
+        <field name="isDemoStore" type="text-indicator"></field>
+        <field name="isImmediatelyFulfilled" type="text-indicator"><description>If immediately fulfilled (for physical stores, etc): don&apos;t send email notices, don&apos;t reserve inventory, and IFF inventory info isn&apos;t found on the server then don&apos;t issue inventory right away</description></field>
+        <field name="inventoryFacilityId" type="id"></field>
+        <field name="oneInventoryFacility" type="text-indicator"></field>
+        <field name="checkInventory" type="text-indicator" enable-audit-log="true"></field>
+        <field name="reserveInventory" type="text-indicator" enable-audit-log="true"></field>
+        <field name="reserveOrderEnumId" type="id"></field>
+        <field name="requireInventory" type="text-indicator" enable-audit-log="true"></field>
+        <field name="balanceResOnOrderCreation" type="text-indicator"><description>If set to Y, when a new sales order is created with backordered items, then reservations on the facility/product are reassigned according to the priority given by the shipBeforeDate field.</description></field>
+        <field name="requirementMethodEnumId" type="id"></field>
+        <field name="orderNumberPrefix" type="id-long"></field>
+        <field name="defaultLocaleString" type="text-short"></field>
+        <field name="defaultCurrencyUomId" type="id"></field>
+        <field name="defaultTimeZoneString" type="id-long"></field>
+        <field name="defaultSalesChannelEnumId" type="id"></field>
+        <field name="allowPassword" type="text-indicator"></field>
+        <field name="defaultPassword" type="text-medium"></field>
+        <field name="explodeOrderItems" type="text-indicator"></field>
+        <field name="checkGcBalance" type="text-indicator"></field>
+        <field name="retryFailedAuths" type="text-indicator"></field>
+        <field name="headerApprovedStatus" type="id" enable-audit-log="true"></field>
+        <field name="itemApprovedStatus" type="id" enable-audit-log="true"></field>
+        <field name="digitalItemApprovedStatus" type="id" enable-audit-log="true"></field>
+        <field name="headerDeclinedStatus" type="id" enable-audit-log="true"></field>
+        <field name="itemDeclinedStatus" type="id" enable-audit-log="true"></field>
+        <field name="headerCancelStatus" type="id" enable-audit-log="true"></field>
+        <field name="itemCancelStatus" type="id" enable-audit-log="true"></field>
+        <field name="authDeclinedMessage" type="text-medium" enable-audit-log="true"></field>
+        <field name="authFraudMessage" type="text-medium" enable-audit-log="true"></field>
+        <field name="authErrorMessage" type="text-medium" enable-audit-log="true"></field>
+        <field name="visualThemeId" type="id"></field>
+        <field name="storeCreditAccountEnumId" type="id"><description>Specify the type (Billing Account or Financial Account) of Store Credit Account used for refund return. Default to Financial Account. 
+              This field is override by ReturnHeader.billingAccountId or ReturnHeader.finAccountId, whichever is specified but if only finAccountId is specified explicitly then system will first
+              try to locate any billing account with -ve amount. If found, then amount is credit to this billing account else the amount will be credit to the financial account of the user.</description></field>
+        <field name="usePrimaryEmailUsername" type="text-indicator"></field>
+        <field name="requireCustomerRole" type="text-indicator"></field>
+        <field name="autoInvoiceDigitalItems" type="text-indicator"><description>Default Y. Invoice digital items when order is placed rather than waiting for completing order items (though shipment/fulfillment).</description></field>
+        <field name="reqShipAddrForDigItems" type="text-indicator"><description>Default Y. Require Shipping Address for Digital Items? Note this only has an effect if there are ONLY digital goods in the cart.</description></field>
+        <field name="showCheckoutGiftOptions" type="text-indicator"></field>
+        <field name="selectPaymentTypePerItem" type="text-indicator"></field>
+        <field name="showPricesWithVatTax" type="text-indicator"></field>
+        <field name="showTaxIsExempt" type="text-indicator"><description>default Y; if set to N do not show isExempt checkbox for PartyTaxAuthInfo, always force to N</description></field>
+        <field name="vatTaxAuthGeoId" type="id"></field>
+        <field name="vatTaxAuthPartyId" type="id"></field>
+        <field name="enableAutoSuggestionList" type="text-indicator"><description>The auto-suggestion list is a special ShoppingList that the addSuggestionsToShoppingList service will maintain for cross-sells of ordered items.</description></field>
+        <field name="enableDigProdUpload" type="text-indicator"></field>
+        <field name="prodSearchExcludeVariants" type="text-indicator"><description>default Y; if set to Y an additional constraint will of isVariant!=Y will be added to all product searches for the store</description></field>
+        <field name="digProdUploadCategoryId" type="id"></field>
+        <field name="autoOrderCcTryExp" type="text-indicator"><description>For auto-orders try other Credit Card expiration dates (if date is wrong or general failure where type not known)?</description></field>
+        <field name="autoOrderCcTryOtherCards" type="text-indicator"><description>For auto-orders try other Credit Cards for the customer?</description></field>
+        <field name="autoOrderCcTryLaterNsf" type="text-indicator"><description>For auto-orders if Credit Cards fails for NSF (Not Sufficient Funds) try again later?</description></field>
+        <field name="autoOrderCcTryLaterMax" type="number-integer"><description>For auto-orders if Credit Cards fails for NSF try again how many times?</description></field>
+        <field name="storeCreditValidDays" type="number-integer"><description>How many days that store credit is valid for. Null value implies no expiration.</description></field>
+        <field name="autoApproveInvoice" type="text-indicator" enable-audit-log="true"><description>If Y or empty, sales invoices created from orders will be marked ready.</description></field>
+        <field name="autoApproveOrder" type="text-indicator" enable-audit-log="true"><description>If N, orders will not be automatically approved when payment is authorized.</description></field>
+        <field name="shipIfCaptureFails" type="text-indicator" enable-audit-log="true"><description>If N, the captureOrderPayments will cause a service error if credit card capture fails.</description></field>
+        <field name="setOwnerUponIssuance" type="text-indicator"><description>If Y or empty, set the inventory item owner upon issuance.</description></field>
+        <field name="reqReturnInventoryReceive" type="text-indicator"><description>Default N. This is the default value for the ReturnHeader.needsInventoryReceive field. If set to Y return will automatically go to the Received status when Accepted instead of waiting for actual receipt of the return.</description></field>
+        <field name="addToCartRemoveIncompat" type="text-indicator"><description>Default N. If Y then on add to cart remove all products in cart with a ProductAssoc record related to or from the product and with the PRODUCT_INCOMPATABLE type.</description></field>
+        <field name="addToCartReplaceUpsell" type="text-indicator"><description>Default N. If Y then on add to cart remove all products in cart with a ProductAssoc record related from the product and with the PRODUCT_UPGRADE type.</description></field>
+        <field name="splitPayPrefPerShpGrp" type="text-indicator"><description>Default N. If Y then before the order is stored the OrderPaymentPreference record will be split, one for each OrderItemShipGroup.</description></field>
+        <field name="managedByLot" type="text-indicator"><description>If Y, the preparator can choose the InventoryItem by this lotId when he makes the picklist.</description></field>
+        <field name="showOutOfStockProducts" type="text-indicator"><description>Default Y. If N then out of stock products will not be displayed on site</description></field>
+        <field name="orderDecimalQuantity" type="text-indicator"><description>use to indicate if decimal quantity can be ordered for this producStore. Default value is Y</description></field>
+        <field name="allowComment" type="text-indicator"><description>Allow comments for order line items per store</description></field>
+        <field name="oldStyleSheet" type="text-intermediate" column-name="STYLE_SHEET"></field>
+        <field name="oldHeaderLogo" type="text-intermediate" column-name="HEADER_LOGO"></field>
+        <field name="oldHeaderMiddleBackground" type="text-intermediate" column-name="HEADER_MIDDLE_BACKGROUND"></field>
+        <field name="oldHeaderRightBackground" type="text-intermediate" column-name="HEADER_RIGHT_BACKGROUND"></field>
+        <relationship type="one" fk-name="PROD_STR_FACILITY" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="inventoryFacilityId" related="facilityId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_RORDENUM" title="ReserveOrder" related="moqui.basic.Enumeration">
+            <key-map field-name="reserveOrderEnumId" related="enumId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_RQMTENUM" title="RequirementMethod" related="moqui.basic.Enumeration">
+            <key-map field-name="requirementMethodEnumId" related="enumId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_PAYTOPTY" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="payToPartyId" related="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_CURUOM" related="moqui.basic.Uom">
+            <key-map field-name="defaultCurrencyUomId" related="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_SALECHN" title="DefaultSalesChannel" related="moqui.basic.Enumeration">
+            <key-map field-name="defaultSalesChannelEnumId" related="enumId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_HAPSTS" title="HeaderApproved" related="moqui.basic.StatusItem">
+            <key-map field-name="headerApprovedStatus" related="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_IAPSTS" title="ItemApproved" related="moqui.basic.StatusItem">
+            <key-map field-name="itemApprovedStatus" related="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_DIAPSTS" title="DigitalItemApproved" related="moqui.basic.StatusItem">
+            <key-map field-name="digitalItemApprovedStatus" related="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_HDCSTS" title="HeaderDeclined" related="moqui.basic.StatusItem">
+            <key-map field-name="headerDeclinedStatus" related="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_IDCSTS" title="ItemDeclined" related="moqui.basic.StatusItem">
+            <key-map field-name="itemDeclinedStatus" related="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_HCNSTS" title="HeaderCancel" related="moqui.basic.StatusItem">
+            <key-map field-name="headerCancelStatus" related="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_ICNSTS" title="ItemCancel" related="moqui.basic.StatusItem">
+            <key-map field-name="itemCancelStatus" related="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="PROD_STR_STRCRDACT" title="StoreCreditAccount" related="moqui.basic.Enumeration">
+            <key-map field-name="storeCreditAccountEnumId" related="enumId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductStoreCatalog" package="org.apache.ofbiz.product.store">
+        <field name="productStoreId" type="id" is-pk="true"></field>
+        <field name="prodCatalogId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <relationship type="one" fk-name="PS_CAT_PRDSTR" related="org.apache.ofbiz.product.store.ProductStore">
+            <key-map field-name="productStoreId"/>
+        </relationship>
+        <relationship type="one" fk-name="PS_CAT_CATALOG" related="org.apache.ofbiz.product.catalog.ProdCatalog">
+            <key-map field-name="prodCatalogId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductStoreEmailSetting" package="org.apache.ofbiz.product.store">
+        <field name="productStoreId" type="id" is-pk="true"></field>
+        <field name="emailType" type="id" is-pk="true"></field>
+        <field name="bodyScreenLocation" type="text-medium" enable-audit-log="true"><description>if empty defaults to a screen based on the emailType</description></field>
+        <field name="xslfoAttachScreenLocation" type="text-medium" enable-audit-log="true"><description>if specified is used to generate XSL:FO that is transformed to a PDF via Apache FOP and attached to the email</description></field>
+        <field name="fromAddress" type="text-medium" enable-audit-log="true"></field>
+        <field name="ccAddress" type="text-medium" enable-audit-log="true"></field>
+        <field name="bccAddress" type="text-medium" enable-audit-log="true"></field>
+        <field name="subject" type="text-medium" enable-audit-log="true"></field>
+        <field name="contentType" type="text-medium"></field>
+        <relationship type="one" fk-name="PRDSTREM_PRDS" related="org.apache.ofbiz.product.store.ProductStore">
+            <key-map field-name="productStoreId"/>
+        </relationship>
+        <relationship type="one" fk-name="PRDSTREM_ENUM" related="moqui.basic.Enumeration">
+            <key-map field-name="emailType" related="enumId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductStoreFacility" package="org.apache.ofbiz.product.store">
+        <field name="productStoreId" type="id" is-pk="true"></field>
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <relationship type="one" fk-name="PRDSTRFAC_PRDS" related="org.apache.ofbiz.product.store.ProductStore">
+            <key-map field-name="productStoreId"/>
+        </relationship>
+        <relationship type="one" fk-name="PRDSTRFAC_FAC" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="ProductStoreRole" package="org.apache.ofbiz.product.store">
+        <field name="partyId" type="id" is-pk="true"></field>
+        <field name="roleTypeId" type="id" is-pk="true"></field>
+        <field name="productStoreId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="sequenceNum" type="number-integer"></field>
+        <relationship type="one-nofk" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.party.party.RoleType">
+            <key-map field-name="roleTypeId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.party.party.Person">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.party.party.PartyGroup">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="PRDSTRRLE_PRLE" related="org.apache.ofbiz.party.party.PartyRole">
+            <key-map field-name="partyId"/>
+            <key-map field-name="roleTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PRDSTRRLE_PRDS" related="org.apache.ofbiz.product.store.ProductStore">
+            <key-map field-name="productStoreId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductStoreShipmentMeth" package="org.apache.ofbiz.product.store">
+        <field name="productStoreShipMethId" type="id" is-pk="true"></field>
+        <field name="productStoreId" type="id"></field>
+        <field name="shipmentMethodTypeId" type="id"></field>
+        <field name="partyId" type="id"></field>
+        <field name="roleTypeId" type="id"></field>
+        <field name="companyPartyId" type="id"></field>
+        <field name="minWeight" type="number-decimal"></field>
+        <field name="maxWeight" type="number-decimal"></field>
+        <field name="minSize" type="number-decimal"></field>
+        <field name="maxSize" type="number-decimal"></field>
+        <field name="minTotal" type="currency-amount"></field>
+        <field name="maxTotal" type="currency-amount"></field>
+        <field name="allowUspsAddr" type="text-indicator"></field>
+        <field name="requireUspsAddr" type="text-indicator"></field>
+        <field name="allowCompanyAddr" type="text-indicator"></field>
+        <field name="requireCompanyAddr" type="text-indicator"></field>
+        <field name="includeNoChargeItems" type="text-indicator"></field>
+        <field name="includeFeatureGroup" type="id"></field>
+        <field name="excludeFeatureGroup" type="id"></field>
+        <field name="includeGeoId" type="id"></field>
+        <field name="excludeGeoId" type="id"></field>
+        <field name="serviceName" type="text-medium"></field>
+        <field name="configProps" type="text-medium"></field>
+        <field name="shipmentCustomMethodId" type="id"></field>
+        <field name="shipmentGatewayConfigId" type="id"></field>
+        <field name="sequenceNumber" type="number-integer"></field>
+        <field name="allowancePercent" type="number-decimal"></field>
+        <field name="minimumPrice" type="currency-amount"></field>
+        <relationship type="one-nofk" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="companyPartyId" related="partyId"/>
+        </relationship>
+        <relationship type="one" related="org.apache.ofbiz.shipment.shipment.ShipmentMethodType">
+            <key-map field-name="shipmentMethodTypeId"/>
+        </relationship>
+        <relationship type="one-nofk" title="Include" related="moqui.basic.Geo">
+            <key-map field-name="includeGeoId" related="geoId"/>
+        </relationship>
+        <relationship type="one-nofk" title="Exclude" related="moqui.basic.Geo">
+            <key-map field-name="excludeGeoId" related="geoId"/>
+        </relationship>
+        <relationship type="one" fk-name="PRDS_SM_SGC" related="org.apache.ofbiz.shipment.shipment.ShipmentGatewayConfig">
+            <key-map field-name="shipmentGatewayConfigId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+    <!-- TODO: skipped element view-entity -->
+</entities>
+

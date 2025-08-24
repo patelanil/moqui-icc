@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.2.0">
+
+    <moqui.service.job.ServiceJob jobName="generate_BrokeredOrderItemsFeed">
+        <parameters parameterName="parentFacilityTypeIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeed">
+        <parameters parameterName="parentFacilityTypeIds"/>
+        <parameters parameterName="productTypeIds"/>
+        <parameters parameterName="isPhysical"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreFulfilledOrderItemsFeed"
+            sendPath="/home/${sftpUsername}/hotwax/StoreFulfilledItemsFeed/${productStoreId}-StoreFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHBrokeredOrderItemsFeed"
+            sendPath="/home/${sftpUsername}/hotwax/WHBrokeredItemsFeed/${productStoreId}-WHBrokeredOrderItemsFeed-${systemMessageId}-${dateTime}.json"/>
+
+    <!-- System Message Type for Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="FulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/${sftpUsername}/hotwax/FulfilledOrderItems/${productStoreId}-FulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="org.moqui.sftp.SftpMessageServices.send#SystemMessageSftp"/>
+
+    <!-- System Message Type for Brokered Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="BrokeredOrderItemsFeed"
+            description="Generate HotWax Brokered Order Items Feed"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/${sftpUsername}/hotwax/BrokeredOrderItems/${productStoreId}-BrokeredOrderItemsFeed-${systemMessageId}-${dateTime}.json"/>
+
+    <!-- System Message Type for Warehouse Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHFulfilledOrderItemsFeed"
+            description="Generate HotWax Warehouse Fulfilled Order Items Feed"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/${sftpUsername}/hotwax/WHFulfilledItemsFeed/${productStoreId}-WHFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="org.moqui.sftp.SftpMessageServices.send#SystemMessageSftp"/>
+</entity-facade-xml>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v2.0.3">
+
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsFinancialFeed">
+        <parameters parameterName="facilityGroupIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_AppeasementsFinancialFeed">
+        <parameters parameterName="facilityGroupIds"/>
+    </moqui.service.job.ServiceJob>
+
+</entity-facade-xml>
+

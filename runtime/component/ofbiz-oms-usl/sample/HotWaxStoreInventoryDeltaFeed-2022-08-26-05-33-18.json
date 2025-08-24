@@ -1,0 +1,29 @@
+[ {
+  "quantity" : 1,
+  "facilityId" : "78",
+  "createdDate" : "2022-08-09 08:38:55.692",
+  "comments" : null,
+  "sku" : "31675487453277",
+  "externalFacilityId" : "78",
+  "productId" : "10001",
+  "eventTypeEnumId" : "ITEM_BROKERED",
+  "orderId" : "30621",
+  "facilityTypeId" : "RETAIL_STORE",
+  "orderHistoryId" : "10978",
+  "shipGroupSeqId" : "00002",
+  "orderItemSeqId" : "00001"
+}, {
+  "quantity" : 1,
+  "comments" : null,
+  "orderHistoryId" : "10907",
+  "createdDate" : "2022-08-09 08:38:50.901",
+  "orderId" : "37427",
+  "productId" : "121046",
+  "sku" : "39446131867719",
+  "facilityId" : "113",
+  "eventTypeEnumId" : "ITEM_BROKERED",
+  "facilityTypeId" : "RETAIL_STORE",
+  "externalFacilityId" : "113",
+  "orderItemSeqId" : "00101",
+  "shipGroupSeqId" : "00003"
+} ]

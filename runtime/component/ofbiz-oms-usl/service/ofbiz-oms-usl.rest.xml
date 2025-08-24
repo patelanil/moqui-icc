@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- General Guideline Verbs: GET=find, POST=create/do, PUT=store (create or update), PATCH=update, DELETE=delete  -->
+
+<resource xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/rest-api-3.xsd"
+          name="ofbiz-oms-usl" displayName="OFBiz OMS USL REST API" version="1.0.0"
+          description="Services and entity operations for OFBiz OMS.">
+
+    <resource name="checkBopisInventory" require-authentication="anonymous-all">
+        <method type="get"><service name="co.hotwax.ofbiz.InventoryServices.check#BopisInventory"/></method>
+        <!--TODO: Added a POST method to support API call from apps.
+            Some API clients, such as Axios, does not send the request body with a GET method.
+            This POST method is a temporary workaround and will be removed once the app team finds a way to send the request body with the GET method.
+        -->
+        <method type="post"><service name="co.hotwax.ofbiz.InventoryServices.check#BopisInventory"/></method>
+    </resource>
+
+    <resource name="checkShippingInventory" require-authentication="anonymous-all">
+        <method type="get"><service name="co.hotwax.ofbiz.InventoryServices.check#ShippingInventory"/></method>
+        <method type="post"><service name="co.hotwax.ofbiz.InventoryServices.check#ShippingInventory"/></method>
+    </resource>
+</resource>

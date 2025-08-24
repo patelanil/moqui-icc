@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="seed">
+    <moqui.basic.Enumeration enumId="mantle.content.root" description="Mantle Content Root Loc" enumTypeId="UserPreferenceKey"/>
+    <moqui.security.UserGroupPreference userGroupId="ALL_USERS" preferenceKey="mantle.content.root"
+                                        preferenceValue="runtime://datamanager"/>
+    <!-- Template System Message Type for preparing custom Shopify Inventory feed from HotWax Format -->
+    <!-- NOTE: This is commented, and added only for reference. For converting the HotWax Standard Shopify
+          Inventory Feed to any new custom format, we should add the SystemMessageType configuration for
+          consumeServiceName, sendServiceName, sendPath etc as below which will send the HotWax Json
+          to SFTP and then Apache Nifi can be used to further transform the file from SFTP. -->
+    <!--<moqui.service.message.SystemMessageType systemMessageTypeId="HotWaxShopifyInventoryFeed"
+            description="Generate HotWax Shopify Inventory Feed Json"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/devtest-sftp/test/dv-ca/HotWax/ShopifyInventoryFeed/ShopifyInventoryFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="org.moqui.sftp.SftpMessageServices.send#SystemMessageSftp"/>-->
+
+    <!--
+     System using Moqui SystemMessage framework for the feed generation process
+     https://moqui.org/m/docs/framework/System+Interfaces/System+Message
+
+        consumeServiceName : The service to call after a message is received to consume it. Should implement the org.moqui.impl.SystemMessageServices.consume#SystemMessage
+                             interface (just a systemMessageId in-parameter). Used by the consume#ReceivedSystemMessage service
+        sendPath: Where to put files on a remote server, syntax is implementation specific and may include both path and a filename pattern
+        sendServiceName: The service to call to send queued messages.Should implement the org.moqui.impl.SystemMessageServices.send#SystemMessage interface (just a
+                         systemMessageId in-parameter and remoteMessageId out-parameter). Used by the send#ProducedSystemMessage service,
+                         and for that service must be specified or will result in an error.
+    -->
+    <!-- System Message Type for Shopify Inventory Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="HotWaxShopifyInventoryFeed" description="Generate HotWax Shopify Inventory Feed"/>
+
+    <!-- System Message Type for Store Fulfilled Order Items Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreFulfilledOrderItemsFeed" description="Generate HotWax Store Fulfilled Order Items Feed"/>
+
+    <!-- System Message Type for Warehouse Brokered Order Items Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHBrokeredOrderItemsFeed" description="Generate HotWax Warehouse Brokered Order Items Feed"/>
+
+    <!-- System Message Type for Returns Financial Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsFinancialFeed" description="Generate HotWax Returns Financial Feed"/>
+
+    <!-- System Message Type for Appeasements Financial Feeds of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="AppeasementsFinancialFeed" description="Generate HotWax Appeasements Financial Feed"/>
+
+    <!-- System Message Type for Sales Financial Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="SalesFinancialFeed" description="Generate HotWax Sales Financial Feed"/>
+
+    <!-- System Message Type for Store Brokered Inventory Delta Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreBrokeredInventoryDeltaFeed" description="Generate HotWax Store Brokered Inventory Delta Feed"/>
+
+    <!-- System Message Type for Returns Shipment Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsShipmentFeed" description="Generate HotWax Received Returns Shipment Feed"/>
+
+    <!-- System Message Type for Do Not Have Inventory Item Variance Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="DoNotHaveInventoryVarianceFeed" description="Generate HotWax Do Not Have Inventory Variance Feed"/>
+
+    <!-- System Message Type for Store Cancelled Reservations Inventory Delta Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreCancelledInventoryDeltaFeed" description="Generate HotWax Store Cancelled Reservations Inventory Delta Feed"/>
+
+    <!-- System Message Type for Fulfilled Order Items Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="FulfilledOrderItemsFeed" description="Generate HotWax Fulfilled Order Items Feed"/>
+
+    <!-- System Message Type for Brokered Order Items Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="BrokeredOrderItemsFeed" description="Generate HotWax Brokered Order Items Feed"/>
+
+    <!-- System Message Type for Warehouse Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHFulfilledOrderItemsFeed" description="Generate HotWax Warehouse Fulfilled Order Items Feed"/>
+
+    <!-- System Message Type for In Store Returns Financial Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InStoreReturnsFinancialFeed" description="Generate HotWax In Store Returns Financial Feed"/>
+
+    <!-- System Message Type for Ecommerce Returns Financial Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="EcomReturnsFinancialFeed" description="Generate HotWax Returns Financial Feed for Ecommerce Returns"/>
+
+    <!-- System Message Type for Ecommerce Store Fulfilled Order Items Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="EcomStoreFulfilledOrderItemsFeed" description="Generate HotWax Store Fulfilled Order Items Feed for Ecommerce Orders"/>
+
+    <!-- System Message Type for POS Store Fulfilled Order Items Feed of HotWax -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="PosStoreFulfilledOrderItemsFeed" description="Generate HotWax Store Fulfilled Order Items Feed for POS Orders"/>
+
+    <!-- System Message Type for FINISHED_GOOD Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="FinishedGoodFulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for FINISHED_GOOD type of Order Items"/>
+
+    <!-- System Message Type for DIGITAL_GOOD Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="DigitalGoodFulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for DIGITAL_GOOD type of Order Items"/>
+
+    <!-- System Message Type for Fulfilled Order Items Feed for ERP -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ErpFulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for ERP"/>
+
+    <!-- System Message Type for Ecommerce Store Fulfilled Order Items Feed for ERP -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ErpEcomStoreFulfilledOrderItemsFeed"
+            description="Generate HotWax Store Fulfilled Order Items Feed for Ecommerce Orders for ERP"/>
+
+    <!-- System Message Type for POS Store Fulfilled Order Items Feed for ERP -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ErpPosStoreFulfilledOrderItemsFeed"
+            description="Generate HotWax Store Fulfilled Order Items Feed for POS Orders for ERP"/>
+
+    <artifactGroups artifactGroupId="ADMIN_API" description="Commerce Admin API (via root resource)">
+        <artifacts artifactTypeEnumId="AT_REST_PATH" inheritAuthz="Y" artifactName="/admin"/>
+        <!-- Full permissions for the ADMIN user group -->
+        <authz artifactAuthzId="ADMIN_API" userGroupId="ADMIN" authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL"/>
+    </artifactGroups>
+
+</entity-facade-xml>

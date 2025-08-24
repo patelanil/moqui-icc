@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+    <!-- TODO: skipped element title -->
+    <!-- TODO: skipped element version -->
+    <entity entity-name="UserLogin" package="org.apache.ofbiz.security.login">
+        <field name="userLoginId" type="id-long" is-pk="true"></field>
+        <field name="currentPassword" type="text-medium"></field>
+        <field name="passwordHint" type="text-medium"></field>
+        <field name="isSystem" type="text-indicator"></field>
+        <field name="enabled" type="text-indicator"></field>
+        <field name="isExternal" type="text-indicator"></field>
+        <field name="hasLoggedOut" type="text-indicator"></field>
+        <field name="requirePasswordChange" type="text-indicator"></field>
+        <field name="lastCurrencyUom" type="id"></field>
+        <field name="lastLocale" type="text-short"></field>
+        <field name="lastTimeZone" type="id-long"></field>
+        <field name="disabledDateTime" type="date-time"></field>
+        <field name="successiveFailedLogins" type="number-integer"></field>
+        <field name="externalAuthId" type="id-long"><description>For use with external authentication; the userLdapDn should be replaced with this</description></field>
+        <field name="userLdapDn" type="id-long"><description>The user&apos;s LDAP Distinguished Name - used for LDAP authentication</description></field>
+        <field name="disabledBy" type="id-long"></field>
+        <relationship type="one-nofk" fk-name="DISABLEDBY_USRLGN" title="DisabledBy" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="disabledBy" related="userLoginId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="UserLoginPasswordHistory" package="org.apache.ofbiz.security.login" cache="never">
+        <field name="userLoginId" type="id-long" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="currentPassword" type="text-medium"></field>
+        <relationship type="one" fk-name="USER_LPH_USER" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="userLoginId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="SecurityGroup" package="org.apache.ofbiz.security.securitygroup">
+        <field name="groupId" type="id" is-pk="true"></field>
+        <field name="groupName" type="text-medium"></field>
+        <field name="description" type="text-medium"></field>
+    </entity>
+    <entity entity-name="SecurityGroupPermission" package="org.apache.ofbiz.security.securitygroup">
+<description>Defines a permission available to a security group; there is no FK to SecurityPermission because we want to leave open the possibility of ad-hoc permissions, especially for the Entity Data Maintenance pages which have TONS of permissions</description>        <field name="groupId" type="id" is-pk="true"></field>
+        <field name="permissionId" type="id-long" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <relationship type="one" fk-name="SEC_GRP_PERM_GRP" related="org.apache.ofbiz.security.securitygroup.SecurityGroup">
+            <key-map field-name="groupId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.security.securitygroup.SecurityPermission">
+            <key-map field-name="permissionId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="SecurityPermission" package="org.apache.ofbiz.security.securitygroup">
+        <field name="permissionId" type="id-long" is-pk="true"></field>
+        <field name="description" type="text-medium"></field>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+    <entity entity-name="UserLoginSecurityGroup" package="org.apache.ofbiz.security.securitygroup">
+<description>Maps a UserLogin to a security group</description>        <field name="userLoginId" type="id-long" is-pk="true"></field>
+        <field name="groupId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <relationship type="one" fk-name="USER_SECGRP_USER" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="userLoginId"/>
+        </relationship>
+        <relationship type="one" fk-name="USER_SECGRP_GRP" related="org.apache.ofbiz.security.securitygroup.SecurityGroup">
+            <key-map field-name="groupId"/>
+        </relationship>
+        <relationship type="many" related="org.apache.ofbiz.security.securitygroup.SecurityGroupPermission">
+            <key-map field-name="groupId"/>
+        </relationship>
+    </entity>
+    <!-- TODO: skipped element view-entity -->
+</entities>
+

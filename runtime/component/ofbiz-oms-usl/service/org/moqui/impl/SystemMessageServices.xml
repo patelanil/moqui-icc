@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- Overriding the receive#SystemMessage interface to include the productStoreId parameter of the SystemMessage entity. -->
+    <!-- This is done to store the productStoreId in SystemMessage as the record is created in the receive#IncomingSystemMessage service and it implements this interface -->
+    <service verb="receive" noun="SystemMessage" type="interface">
+        <in-parameters>
+            <parameter name="systemMessageTypeId" required="true"/>
+            <parameter name="messageText" required="true"/>
+            <parameter name="systemMessageRemoteId"/>
+            <parameter name="remoteMessageId"/>
+            <parameter name="productStoreId"/>
+            <!-- NOTE:
+                 1. Added the below parameter as it is required for the new fulfillment code added
+                 in https://github.com/hotwax/mantle-shopify-connector.
+                 2. This interface was over-ridden in mantle-shopify-connector to add this new field.
+                 3. But the issue was faced as the same interface is over-ridden in ofbiz-oms-usl
+                 as well to include productStoreId.
+                 4. Once Moqui was deployed with both the components, it did not over-ride the
+                 consumeSmrId field, but only productStoreId field got added.
+                 5. The observation is that it is due to the sequence in which the component gets
+                 deployed (alphabeticaly) and so the change of only ofbiz-oms-usl got added.
+                 6. The expected behavior was that both fields would have gotten added from the
+                 the over-ridden interface in both the components, but didn't work like that.
+                 7. For now, we will add in ofbiz-oms-usl rep.
+                 8. TODO Revisit later and check the correct way to handle such scenarios. -->
+            <parameter name="consumeSmrId"/>
+            <parameter name="parentMessageId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="systemMessageIdList" type="List"><parameter name="systemMessageId"/></parameter>
+        </out-parameters>
+    </service>
+    <service verb="queue" noun="SystemMessage">
+        <description>Queue an outgoing message. Creates a SystemMessage record for the outgoing message in the
+            Produced status. If sendNow=true (default) will attempt to send it immediately, synchronously or asynchronously),
+            otherwise the message will be picked up the next time the send#ProducedSystemMessages service runs.</description>
+        <in-parameters>
+            <parameter name="systemMessageId"><description>Sequenced if null, may be passed in (sequenced value
+                determined in advance) because sometimes this is needed as a reference ID inside a message.</description></parameter>
+
+            <auto-parameters entity-name="moqui.service.message.SystemMessage" include="nonpk"/>
+
+            <parameter name="systemMessageTypeId" required="true"/>
+            <parameter name="messageText" required="true"/>
+            <parameter name="systemMessageRemoteId"><description>Required if the send service
+                (SystemMessageType.sendServiceName) requires it. The send#SystemMessageJsonRpc service does require it.</description></parameter>
+            <parameter name="statusId" default-value="SmsgProduced"/>
+            <parameter name="isOutgoing" default-value="Y"/>
+            <parameter name="initDate" type="Timestamp" default="ec.user.nowTimestamp"/>
+
+            <parameter name="sendNow" type="Boolean" default="true"/>
+            <parameter name="mode" default-value="async"/>
+        </in-parameters>
+        <out-parameters><parameter name="systemMessageId"/></out-parameters>
+        <actions>
+            <service-call name="create#moqui.service.message.SystemMessage" in-map="context" out-map="context" transaction="force-new"/>
+
+            <if condition="sendNow">
+                <if condition="mode == async">
+                    <then>
+                        <service-call name="org.moqui.impl.SystemMessageServices.send#ProducedSystemMessage"
+                                      in-map="[systemMessageId:systemMessageId]" async="true"/>
+                    </then>
+                    <else>
+                        <service-call name="org.moqui.impl.SystemMessageServices.send#ProducedSystemMessage"
+                                      in-map="[systemMessageId:systemMessageId]" ignore-error="true" transaction="force-new"/>
+                    </else>
+                </if>
+            </if>
+        </actions>
+    </service>
+    <service verb="send" noun="AllProducedSystemMessages" authenticate="anonymous-all">
+        <description>Meant to be run scheduled, this service tries to send outgoing (isOutgoing=Y) messages in the
+            SmsgProduced status. After retryLimit attempts will change the status to SmsgError.</description>
+        <in-parameters>
+            <parameter name="retryMinutes" type="BigDecimal" default="60"/>
+            <parameter name="retryLimit" type="Integer" default="24"/><!-- by default try for 1 day -->
+            <parameter name="systemMessageTypeIds" type="List"/>
+            <parameter name="mode" default-value="async"/>
+        </in-parameters>
+        <actions>
+            <set field="retryTimestamp" from="new Timestamp((System.currentTimeMillis() - (retryMinutes * 60000)) as long)"/>
+            <entity-find entity-name="moqui.service.message.SystemMessage" list="smList" limit="200">
+                <econdition field-name="statusId" value="SmsgProduced"/>
+                <econdition field-name="isOutgoing" value="Y"/>
+                <econdition field-name="lastAttemptDate" operator="less" from="retryTimestamp" or-null="true"/>
+                <econdition field-name="systemMessageTypeId" operator="in" from="systemMessageTypeIds" ignore-if-empty="true"/>
+                <order-by field-name="initDate"/><!-- get oldest first -->
+            </entity-find>
+            <iterate list="smList" entry="sm">
+                <if condition="sm.failCount &lt; retryLimit">
+                    <if condition="mode == async">
+                        <then>
+                            <service-call name="org.moqui.impl.SystemMessageServices.send#ProducedSystemMessage"
+                                          in-map="[systemMessageId:sm.systemMessageId]" async="true"/>
+                        </then>
+                        <else>
+                            <service-call name="org.moqui.impl.SystemMessageServices.send#ProducedSystemMessage"
+                                          in-map="[systemMessageId:sm.systemMessageId]" ignore-error="true" transaction="force-new"/>
+                        </else>
+                    </if>
+                    <else>
+                        <service-call name="update#moqui.service.message.SystemMessage" transaction="force-new"
+                                      in-map="[systemMessageId:sm.systemMessageId, statusId:'SmsgError',
+                                    lastAttemptDate:ec.user.nowTimestamp]"/>
+                    </else>
+                </if>
+            </iterate>
+        </actions>
+    </service>
+    <service verb="consume" noun="AllReceivedSystemMessages" authenticate="anonymous-all">
+        <description>Consume incoming (isOutgoing=N) SystemMessage records not already consumed (in the SmsgReceived
+            status). Messages in this state will normally have had an error in consuming. After retryLimit attempts
+            will change the status to SmsgError.</description>
+        <in-parameters>
+            <parameter name="retryMinutes" type="BigDecimal" default="10"/>
+            <parameter name="retryLimit" type="Integer" default="3"/>
+            <parameter name="systemMessageTypeIds" type="List"/>
+            <parameter name="mode" default-value="async"/>
+            <parameter name="limit" type="Integer" default-value="200"/>
+        </in-parameters>
+        <actions>
+            <set field="retryTimestamp" from="new Timestamp((System.currentTimeMillis() - (retryMinutes * 60000)) as long)"/>
+            <entity-find entity-name="moqui.service.message.SystemMessage" list="smList" limit="limit">
+                <econdition field-name="statusId" value="SmsgReceived"/>
+                <econdition field-name="isOutgoing" value="N"/>
+                <econdition field-name="lastAttemptDate" operator="less" from="retryTimestamp" or-null="true"/>
+                <econdition field-name="systemMessageTypeId" operator="in" from="systemMessageTypeIds" ignore-if-empty="true"/>
+                <order-by field-name="initDate"/><!-- get oldest first -->
+            </entity-find>
+            <iterate list="smList" entry="sm">
+                <if condition="sm.failCount &lt; retryLimit">
+                    <if condition="mode == async">
+                        <then>
+                            <service-call name="org.moqui.impl.SystemMessageServices.consume#ReceivedSystemMessage"
+                                          in-map="[systemMessageId:sm.systemMessageId]" async="true"/>
+                        </then>
+                        <else>
+                            <service-call name="org.moqui.impl.SystemMessageServices.consume#ReceivedSystemMessage"
+                                          in-map="[systemMessageId:sm.systemMessageId]" transaction="force-new" ignore-error="true"/>
+                        </else>
+                    </if>
+                    <else>
+                        <service-call name="update#moqui.service.message.SystemMessage" transaction="force-new"
+                                      in-map="[systemMessageId:sm.systemMessageId, statusId:'SmsgError',
+                                    lastAttemptDate:ec.user.nowTimestamp]"/>
+                    </else>
+                </if>
+            </iterate>
+        </actions>
+    </service>
+</services>

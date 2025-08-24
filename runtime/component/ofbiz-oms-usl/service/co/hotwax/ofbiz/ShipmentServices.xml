@@ -1,0 +1,648 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- TODO: Add support to generate feed for returns shipment received after a specific date -->
+    <service verb="generate" noun="ReturnsShipmentFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <in-parameters>
+            <parameter name="shipmentId">
+                <description>Parameter to fetch Return Shipment details for a specific shipmentId.</description>
+            </parameter>
+            <parameter name="shipmentItemSeqId">
+                <description>Parameter to fetch Return Shipment details for a specific shipmentItemSeqId.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send Returns Shipment Feed.</description>
+            </parameter>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Returns Shipment Feed.</description>
+            </parameter>
+            <!-- NOTE: createdDate refers to the date when the return process was initiated for orderItem.
+                The date comes from json sent by external system and it saved in HC as is.
+                It does not refer to the date on which it was imported or created in HC -->
+            <parameter name="createdDate">
+                <description>Parameter to fetch Return Shipment details processed after a specific date.</description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of product Store Ids for generating Returns Shipment feed.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <log message="Generating Returns Shipment Feed file for Shipment ${shipmentId} at time ${nowDate}"/>
+
+            <!-- Fetch the eligible received return shipments with type 'SALES_RETURN' and totalAcceptedQuantity greater than 0,
+                from the ShipmentAndItemAndReceipt View to prepare the Returns Shipment Feed
+
+                1. As discussed, we are not putting a check on the statusId for 'PURCH_SHIP_RECEIVED' as in case of partial receiving
+                    the status is 'PURCH_SHIP_SHIPPED' and not 'PURCH_SHIP_RECEIVED'
+                2. Check on totalQuantityAccepted is added as in case the entire shipment item quantity is received and
+                    partial receiving, the value in totalQuantityAccepted will be greater than 0. -->
+
+            <!-- TODO: Add a in-parameter for statusId to generate return Shipment feed for a specific statusId -->
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                //Performing entity find operation using groovy script
+                returnShipments_find = ec.entity.find("org.apache.ofbiz.shipment.shipment.ShipmentAndItemAndReceipt")
+                .condition("shipmentTypeId", "SALES_RETURN")
+
+                if(shipmentId) returnShipments_find.condition("shipmentId", shipmentId)
+                if(shipmentItemSeqId) returnShipments_find.condition("shipmentItemSeqId", shipmentItemSeqId)
+                if(createdDate) returnShipments_find.condition("createdDate", EntityCondition.ComparisonOperator.GREATER_THAN, createdDate)
+                if(productStoreIds) returnShipments_find.condition("productStoreId", EntityCondition.ComparisonOperator.IN, productStoreIds)
+
+                returnShipments_find.havingCondition(ec.entity.conditionFactory.makeCondition("totalQuantityAccepted", EntityCondition.ComparisonOperator.GREATER_THAN, 0))
+                .selectField("shipmentId")
+
+                // Using try-with-resources to automatically close the EntityListIterator 'returnShipmentsItr'
+                try (returnShipmentsItr = returnShipments_find.iterator()) {
+            </script>
+            <!-- If no shipments in returnShipmentsItr, then don't generate the file -->
+            <if condition="!returnShipmentsItr.hasNext()">
+                <return message="No eligible shipments for Returns Shipment Feed at ${nowDate}, not generating the HotWax Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds or more than one productStoreIds are passed in the list,
+             then set the productStoreId to a default value as the feed being generated contains the Return Shipment feed for more than one product store ids. -->
+            <!-- If productStoreIds list contains one value then set the productStoreId from the list. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+            
+            <!-- Prepare Returns Shipment JSON File Path -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+                        [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS'),
+                         productStoreId:productStoreId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Returns Shipment Feed file -->
+            <script>
+                try {
+                    //json file
+                    File returnsShipmentFeedFile = new File(jsonFilePath)
+                    if (!returnsShipmentFeedFile.parentFile.exists()) returnsShipmentFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, returnsShipmentFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <iterate list="returnShipmentsItr" entry="returnShipment">
+
+                <!-- Set returnShipmentItemDetailList to add the return shipment items map -->
+                <set field="returnShipmentItemDetailList" from="[]"/>
+
+                <!-- Fetch the returns shipment items from the ShipmentAndItemAndReceipt View to prepare the map -->
+                <!-- NOTE: added check on totalQuantityAccepted again to only get the items which have totalQuantityAccepted greater than 0 -->
+                <entity-find entity-name="org.apache.ofbiz.shipment.shipment.ShipmentAndItemAndReceipt" list="returnShipmentItemsItr">
+                    <econdition field-name="shipmentId" from="returnShipment.shipmentId"/>
+                    <having-econditions>
+                        <econdition field-name="totalQuantityAccepted" operator="greater" value="0"/>
+                    </having-econditions>
+                    <use-iterator/>
+                </entity-find>
+
+                <iterate list="returnShipmentItemsItr" entry="returnShipmentItem">
+
+                    <!-- Get the orderIdentifications list from the OrderIdentification -->
+                    <entity-find entity-name="co.hotwax.order.OrderIdentification" list="orderIdentifications">
+                        <econdition field-name="orderId" from="returnShipmentItem.primaryOrderId"/>
+                        <date-filter/>
+                        <select-field field-name="orderId,orderIdentificationTypeId,idValue"/>
+                    </entity-find>
+
+                    <!-- Fetch the externalId from OrderItem -->
+                    <entity-find entity-name="org.apache.ofbiz.order.order.OrderItem" list="orderItemList">
+                        <econdition field-name="orderId" from="returnShipmentItem.primaryOrderId"/>
+                        <econdition field-name="productId" from="returnShipmentItem.productId"/>
+                        <select-field field-name="orderId,productId,externalId"/>
+                    </entity-find>
+
+                    <!-- Prepare the returnShipmentItemDetail map with the fields from the ShipmentAndItemAndReceipt view
+                         and orderItem external id -->
+                    <set field="returnShipmentItemDetail" from="[shipmentId: returnShipmentItem.shipmentId, shipmentItemSeqId:returnShipmentItem.shipmentItemSeqId,
+                        productId:returnShipmentItem.productId, quantity:returnShipmentItem.quantity, availableToPromise:returnShipmentItem.availableToPromise,
+                        totalQuantityAccepted:returnShipmentItem.totalQuantityAccepted, receivedDate:returnShipmentItem.receivedDate, receiptId:returnShipmentItem.receiptId,
+                        orderItemExternalId:orderItemList?.first?.externalId]"/>
+
+                    <!-- Prepare list with the return shipment items for a shipmentId -->
+                    <script>
+                        returnShipmentItemDetailList.add(returnShipmentItemDetail)
+                    </script>
+
+                    <!-- Prepare the map with few fields of Shipment level, orderIdentifications list and the return shipment items list -->
+                    <!-- NOTE: Added limited fields from the ShipmentAndItemAndReceipt view for the shipment level details -->
+                    <set field="returnShipmentMap" from="[shipmentId:returnShipmentItem.shipmentId, shipmentTypeId:returnShipmentItem.shipmentTypeId, statusId:returnShipmentItem.statusId,
+                        primaryOrderId:returnShipmentItem.primaryOrderId, picklistBinId:returnShipmentItem.picklistBinId, externalId:returnShipmentItem.externalId, createdDate:returnShipmentItem.createdDate,
+                        orderIdentifications:orderIdentifications, returnShipmentItems:returnShipmentItemDetailList]"/>
+
+                    <!-- Note - This is done as part of initial implementation approach to create the Feed history records inside the iterate.
+                         TODO Explore how we can take limit while processing records, default can be 1000, it means we are generating feed for 1000 items,
+                         in that way will manage mysql transactions properly. https://git.hotwax.co/HC2/plugins/ofbiz-oms-usl/-/issues/46 -->
+
+                    <!-- Create record of ShipmentItemHistory to keep logs for the Received Returns Shipment Feed -->
+                    <service-call name="create#co.hotwax.integration.shipment.ShipmentItemHistory" in-map="[shipmentId:returnShipmentItem?.shipmentId,
+                            shipmentItemSeqId:returnShipmentItem?.shipmentItemSeqId, receiptId:returnShipmentItem?.receiptId,
+                            productId:returnShipmentItem?.productId, quantity:returnShipmentItem?.totalQuantityAccepted,
+                            createdDate:nowDate, comments:'Return Shipment Item sent as part of Received Returns Shipment Feed.']"/>
+                </iterate>
+                <script>
+                    new ObjectMapper()
+                    .setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                    .writerWithDefaultPrettyPrinter().writeValue(jGenerator, returnShipmentMap)
+                </script>
+            </iterate>
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                        logger.info("Error preparing Returns Shipment Feed file", e)
+                }
+            }
+            </script>
+
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and send the file to sftp
+             using the send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[systemMessageTypeId:systemMessageTypeId, systemMessageRemoteId:systemMessageRemoteId,
+                    messageText:jsonFilePathRef, productStoreId:productStoreId]" out-map="returnsShipmentFeedSysMsgOut"/>
+
+            <return message="Completed the Returns Shipment Feed file at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and
+                remote ${systemMessageRemoteId} saved response in messages ${returnsShipmentFeedSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+
+    <!-- The service will generate Purchase Orders Receipt JSON as per below handling
+            1. If a PO has multiple items and all received before next feed generation, the
+               feed file will contain order and all its items shipment receipt details.
+            2. If a PO has 3 items and only 1 is received before next feed generation, the
+               feed file will still contain order and all its items, but the 1 item received
+               will have its shipment receipt details and other 2 items will contain empty
+               shipment details.
+            3. In case of partial receiving, the qty received after the last feed will be
+               included in the feed for that item.
+            4. The history records will be created in ShipmentItemHistory entity for the Shipment
+               Receipts already included in the feed.
+               NOTE If a PO Item as multiple receipts, the feed will create history records for
+               all receipts but in feed, will include totalReceivedQuantity in purchaseOrderItems
+               list; the individual receipt details will also be included in shipmentReceipts
+               inside purchaseOrderItems list.
+            5. Eg.
+                i. If a PO with 4 items, we receive 2 items today then we will include all 4 items
+                with the first 2 items having its receipt details and the last two items
+                with empty receipt details.
+                ii. Now, we receive only the 3rd item by the next day, we will then include the 3rd item
+                with the receipt details and the 4th item with empty receipt details.
+                Here we will not include the first two items again as we have already sent in the
+                earlier feed.
+                iii. If we receive the 4th Item now, we will include only 4th item with its
+                received details.
+     -->
+    <service verb="generate" noun="PurchaseOrdersReceiptFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>
+            Service to generate Purchase Orders Receipt Feed. The HotWax JSON will be order wise
+            with each order containing information about its purchase order items and its receipt
+            details.
+        </description>
+        <in-parameters>
+            <parameter name="orderId">
+                <description>Parameter to generate Purchase Orders Receipt Feed for a specific orderId.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send Purchase Orders Receipt Feed.</description>
+            </parameter>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Purchase Orders Receipt Feed.</description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of product Store Ids for generating Purchase Orders Receipt Feed.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+            <parameter name="shipmentTypeId">
+                <description>Parameter to fetch Purchase Order details for a specific Shipment Type ID.</description>
+            </parameter>
+            <parameter name="shipmentStatusId">
+                <description>Parameter to fetch Purchase Order details for a specific Shipment Status ID.</description>
+            </parameter>
+            <parameter name="sinceReceivedDate">
+                <description>Parameter to fetch the Purchase Order details received after a specific date.</description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <log message="Generating Purchase Orders Receipt file for order ${orderId} at time ${nowDate}"/>
+
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                //Performing entity find operation using groovy script
+                <!-- Fetch the eligible Purchase Orders first -->
+                purchaseOrders_find = ec.entity.find("org.apache.ofbiz.shipment.shipment.PurchaseOrderShipmentReceipt")
+                if(orderId) purchaseOrders_find.condition("orderId", orderId)
+                <!-- NOTE The conditions of shipmentTypeId and shipmentStatusId is included in the
+                     service and not in the view, PurchaseOrderShipmentReceipt because of the
+                     requirement for this implementation that If a PO has multiple items and only few
+                     are received, we still have to fetch all order item details; else if these
+                     conditions are used in the view, then all order items cannot be fetched since
+                     no shipment for some items  -->
+                if(shipmentTypeId) purchaseOrders_find.condition("shipmentTypeId", shipmentTypeId)
+                if(shipmentStatusId) purchaseOrders_find.condition("shipmentStatusId", shipmentStatusId)
+                if(productStoreIds) purchaseOrders_find.condition("productStoreId", EntityCondition.ComparisonOperator.IN, productStoreIds)
+                if(sinceReceivedDate)
+                purchaseOrders_find.havingCondition(ec.entity.conditionFactory.makeCondition("receivedDate", EntityCondition.ComparisonOperator.GREATER_THAN, sinceReceivedDate))
+                purchaseOrders_find.selectField("orderId,orderExternalId,orderStatusId,productStoreId,originFacilityId")
+
+                // Using try-with-resources to automatically close the EntityListIterator 'purchaseOrdersItr'
+                try (purchaseOrdersItr = purchaseOrders_find.iterator()) {
+            </script>
+            <!-- If no eligible orders, then don't generate the file -->
+            <if condition="!purchaseOrdersItr.hasNext()">
+                <return message="No eligible Purchase Orders for Receipt Feed at ${nowDate}, not generating the HotWax Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds or more than one productStoreIds are passed in the list,
+             then set the productStoreId to a default value as the feed being generated contains the Return Shipment feed for more than one product store ids. -->
+            <!-- If productStoreIds list contains one value then set the productStoreId from the list. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Purchase Orders Receipt JSON File Path -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+                        [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS'),
+                         productStoreId:productStoreId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Purchase Orders Receipt Feed file -->
+            <script>
+                try {
+                    //json file
+                    File purchaseOrdersReceiptFile = new File(jsonFilePath)
+                    if (!purchaseOrdersReceiptFile.parentFile.exists()) purchaseOrdersReceiptFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, purchaseOrdersReceiptFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <iterate list="purchaseOrdersItr" entry="purchaseOrder">
+
+                <!-- Set poItems List to add the item map -->
+                <set field="poItemsList" from="[]"/>
+
+                <!-- Fetch the Purchase Order Items for the eligible PO -->
+                <entity-find entity-name="org.apache.ofbiz.shipment.shipment.PurchaseOrderShipmentReceipt" list="purchaseOrderItems">
+                    <econdition field-name="orderId" from="purchaseOrder.orderId"/>
+                    <!-- NOTE The conditions of shipmentTypeId and shipmentStatusId is included here also
+                         to fetch order items and its shipment details for only the required shipment type and
+                         status for the Order ID.
+                         or-null="true" is added to include all items of the PO else it will be skipped
+                         for which no shipment, and it is the feed behavior to prepare all items
+                         of the PO. -->
+                    <econdition field-name="shipmentTypeId" ignore-if-empty="true" or-null="true"/>
+                    <econdition field-name="shipmentStatusId" ignore-if-empty="true" or-null="true"/>
+                    <having-econditions>
+                        <!-- NOTE if or-null is removed, then items for which no item is received will be skipped
+                             and it is the requirement of current JSON format to include all items for the eligible
+                             PO if some of the items are received -->
+                        <econdition field-name="receivedDate" operator="greater" from="sinceReceivedDate" ignore-if-empty="true" or-null="true"/>
+                    </having-econditions>
+                    <select-field field-name="orderId,orderItemSeqId,orderItemExternalId,productId,sku,receivedDate,itemStatusId,quantity,availableToPromise"/>
+                </entity-find>
+
+                <!-- For each order item, we will fetch the valid Shipment Receipts so that correct quantity
+                     i.e. sum(qtyAccepted) can be evaluated in the next entity find using these receipt Ids
+                     only, which was updated after the last run time.
+                     This is important so that the qty already sent as part of earlier feeds should not be
+                     sent again -->
+                <iterate list="purchaseOrderItems" entry="purchaseOrderItem">
+
+                    <entity-find entity-name="org.apache.ofbiz.shipment.shipment.PurchaseOrderShipmentReceipt" list="purchaseOrderItemReceipts">
+                        <econdition field-name="orderId" from="purchaseOrder.orderId"/>
+                        <econdition field-name="orderItemSeqId" from="purchaseOrderItem.orderItemSeqId"/>
+                        <!-- NOTE The conditions of shipmentTypeId and shipmentStatusId is included here also
+                         to fetch the shipment item receipt details for only the required shipment type and
+                         status for the Order Item. -->
+                        <econdition field-name="shipmentTypeId" ignore-if-empty="true"/>
+                        <econdition field-name="shipmentStatusId" ignore-if-empty="true"/>
+                        <having-econditions>
+                            <econdition field-name="receivedDate" operator="greater" from="sinceReceivedDate" ignore-if-empty="true"/>
+                        </having-econditions>
+                        <select-field field-name="shipmentId,shipmentItemSeqId,receiptId,productId,totalQuantityAccepted,totalQuantityRejected,receivedDate,shipmentTypeId,shipmentStatusId"/>
+                    </entity-find>
+                    <set field="receiptIds" from="purchaseOrderItemReceipts*.receiptId"/>
+
+                    <!-- Now fetch total quantity accepted and rejected for only these receipt Ids -->
+                    <entity-find entity-name="org.apache.ofbiz.shipment.shipment.PurchaseOrderShipmentReceipt" list="purchaseOrderItemQtyReceivedList">
+                        <econdition field-name="receiptId" operator="in" from="receiptIds"/>
+                        <select-field field-name="totalQuantityAccepted,totalQuantityRejected"/>
+                    </entity-find>
+
+                    <set field="poItemMap" from="purchaseOrderItem.findAll { it.value != null }.sort() +
+                        [totalReceivedQuantity:purchaseOrderItemQtyReceivedList.first?.totalQuantityAccepted,
+                        totalRejectedQuantity:purchaseOrderItemQtyReceivedList.first?.totalQuantityRejected,
+                        shipmentReceipts:purchaseOrderItemReceipts.getPlainValueList(0)]"/>
+
+                    <script>
+                        poItemsList.add(poItemMap)
+                    </script>
+
+                    <!-- Create history record for each Shipment Receipt -->
+                    <iterate list="purchaseOrderItemReceipts" entry="purchaseOrderItemReceipt">
+                        <service-call name="create#co.hotwax.integration.shipment.ShipmentItemHistory"
+                                in-map="[shipmentId:purchaseOrderItemReceipt.shipmentId,
+                                shipmentItemSeqId:purchaseOrderItemReceipt.shipmentItemSeqId,
+                                receiptId:purchaseOrderItemReceipt.receiptId,
+                                productId:purchaseOrderItemReceipt.productId,
+                                quantity:purchaseOrderItemReceipt.totalQuantityAccepted,
+                                createdDate:nowDate,
+                                comments:'Shipment Item Receipt sent as part of Purchase Orders Receipt Feed.']"/>
+                    </iterate>
+                </iterate>
+
+                <!-- Prepare the Purchase Order map details -->
+                <set field="poMap" from="purchaseOrder.findAll { it.value != null } + [purchaseOrderItems:poItemsList]"/>
+
+                <script>
+                    new ObjectMapper()
+                    .setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                    .writerWithDefaultPrettyPrinter().writeValue(jGenerator, poMap)
+                </script>
+            </iterate>
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.info("Error preparing PO Shipment Feed file", e)
+                }
+            }
+            </script>
+
+            <!-- Save the Json Feed File path in System Message messageText -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[systemMessageTypeId:systemMessageTypeId, systemMessageRemoteId:systemMessageRemoteId,
+                    messageText:jsonFilePathRef, productStoreId:productStoreId]" out-map="purchaseOrderReceiptFeedSysMsgOut"/>
+
+            <return message="Completed the Purchase Orders Receipt Feed file at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and
+                remote ${systemMessageRemoteId} saved response in messages ${purchaseOrderReceiptFeedSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+
+    <!--This service will generate the feed for eligible Shipments Receipts as per below handling,
+            1. If the shipment has multiple items and all received before the next feed generation, the
+               feed file will contain shipment and all its item shipment receipt details.
+            2. If a Shipment has 3 items and only 1 is received before next feed generation, the
+               feed file will still contain order and all its items, but the 1 item received
+               will have its shipment receipt details and other 2 items will contain empty
+               shipment details.
+            3. The history records will be created in ShipmentItemHistory entity for the Shipment
+               Receipts already included in the feed.
+               NOTE: If a Shipment Item as multiple receipts, the feed will create records for
+               all receipts but in feed, will include totalReceivedQuantity in shipmentItems
+               list; the individual receipt details will also be included in shipmentReceipts
+               inside shipmentItems list.
+            4. Eg.
+                i. If a Shipment with 4 items, we receive 2 items today then we will include all
+                4 items with the first 2 items having its receipt details and the last two items
+                with empty receipt details.
+                ii. Now, we receive only the 3rd item by the next day, we will then include the 3rd
+                item with the receipt details and the 4th item with empty receipt details.
+                Here we will not include the first two items again as we have already sent in the
+                earlier feed.
+                iii. If we receive the 4th Item now, we will include only 4th item with its
+                received details.
+    -->
+    <!-- NOTE IMP TODO: Currently, no brand support in HC data model wrt only Shipments, related ticket is 
+         created https://git.hotwax.co/commerce/oms/-/issues/69, the related view and service needs to be
+         revisited once this ticket is handled. -->
+    <service verb="generate" noun="ShipmentsReceiptFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>
+            Service to generate Shipments Receipt Feed. The HotWax JSON will be shipment wise with each
+            shipment containing information about its Shipment items and its receipt details.
+        </description>
+        <in-parameters>
+            <parameter name="shipmentId">
+                <description>Parameter to fetch Shipment details for a specific shipmentId.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send Shipment Receipt Feed.</description>
+            </parameter>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Shipment Receipt Feed.</description>
+            </parameter>
+            <parameter name="sinceReceivedDate">
+                <description>Parameter to fetch Shipment Receipt details received after a specific date.</description>
+            </parameter>
+            <parameter name="shipmentTypeId">
+                <description>Parameter to fetch Shipment Receipt details for a specific Shipment Type ID.</description>
+            </parameter>
+            <parameter name="shipmentStatusId">
+                <description>Parameter to fetch Shipment Receipt details for a specific Status ID.</description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of product Store Ids for generating Shipment Receipt feed.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <log message="Generating Shipments Receipt Feed file for Shipment ${shipmentId} at time ${nowDate}"/>
+
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                //Performing entity find operation using groovy script
+                 <!-- Fetch the eligible Shipments from the ShipmentAndItemAndReceipt View to prepare the Shipment Receipt Feed -->
+                shipments_find = ec.entity.find("org.apache.ofbiz.shipment.shipment.ShipmentAndItemAndReceipt")
+                if(shipmentId) shipments_find.condition("shipmentId", shipmentId)
+                if(shipmentTypeId) shipments_find.condition("shipmentTypeId", shipmentTypeId)
+                if(shipmentStatusId) shipments_find.condition("statusId", shipmentStatusId)
+                if(productStoreIds) shipments_find.condition("productStoreId", EntityCondition.ComparisonOperator.IN, productStoreIds)
+                if(sinceReceivedDate)
+                shipments_find.havingCondition(ec.entity.conditionFactory.makeCondition("receivedDate", EntityCondition.ComparisonOperator.GREATER_THAN, sinceReceivedDate))
+                <!-- Select the shipment level details -->
+                shipments_find.selectField("shipmentId,externalId,createdDate,statusId,shipmentTypeId,originFacilityId")
+
+                // Using try-with-resources to automatically close the EntityListIterator 'shipmentsItr'
+                try (shipmentsItr = shipments_find.iterator()) {
+            </script>
+            <!-- If no shipments in shipmentsItr, then don't generate the file -->
+            <if condition="!shipmentsItr.hasNext()">
+                <return message="No eligible Shipments for Shipments Receipts Feed at ${nowDate}, not generating the HotWax Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds or more than one productStoreIds are passed in the list,
+             then set the productStoreId to a default value as the feed being generated contains the Shipment Receipts feed for more than one product store ids. -->
+            <!-- If productStoreIds list contains one value then set the productStoreId from the list. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Shipment Receipt JSON File Path -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+                        [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS'),
+                         productStoreId:productStoreId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Shipment Receipt Feed file -->
+            <script>
+                try {
+                    //json file
+                    File shipmentsReceiptFeedFile = new File(jsonFilePath)
+                    if (!shipmentsReceiptFeedFile.parentFile.exists()) shipmentsReceiptFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, shipmentsReceiptFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <iterate list="shipmentsItr" entry="shipment">
+
+                <!-- Set shipmentItemsList to add the shipment items map -->
+                <set field="shipmentItemsList" from="[]"/>
+
+                <!-- Fetch Shipment Items for eligible shipment IDs from ShipmentAndItemAndReceipt view -->
+                <entity-find entity-name="org.apache.ofbiz.shipment.shipment.ShipmentAndItemAndReceipt" list="shipmentItems">
+                    <econdition field-name="shipmentId" from="shipment.shipmentId"/>
+                    <select-field field-name="shipmentId,shipmentItemSeqId,productId,quantity,serialNumber,shipmentItemExternalId"/>
+                </entity-find>
+
+                <!-- Fetch Shipment attributes for eligible shipment IDs from ShipmentAttribute entity -->
+                <entity-find entity-name="org.apache.ofbiz.shipment.shipment.ShipmentAttribute" list="shipmentAttributeList">
+                    <econdition field-name="shipmentId" from="shipment.shipmentId"/>
+                </entity-find>
+
+                <iterate list="shipmentItems" entry="shipmentItem">
+                    <!-- Fetch all the Shipment Receipts for eligible Shipments -->
+                    <!-- Here, added is-not-null check on receipt ID to exclude those records where the receipt ID for
+                        a shipment item does not exist. We will be using this list to prepare the history records for
+                        all the Shipment Item Receipts.
+                        NOTE: Ideally, we will not have multiple receipts for a shipment Item as this is not allowed
+                        business process wise, but in code, handled in generic way to fetch all receipts if any and
+                        use it to create the history. -->
+                    <entity-find entity-name="org.apache.ofbiz.shipment.shipment.ShipmentAndItemAndReceipt" list="shipmentItemReceipts">
+                        <econdition field-name="shipmentId" from="shipmentItem.shipmentId"/>
+                        <econdition field-name="shipmentItemSeqId" from="shipmentItem.shipmentItemSeqId"/>
+                        <econdition field-name="receiptId" operator="is-not-null"/>
+                        <select-field field-name="receiptId,totalQuantityAccepted,receivedDate"/>
+                    </entity-find>
+
+                    <!-- Get all Good Identifications for Product -->
+                    <entity-find entity-name="org.apache.ofbiz.product.product.GoodIdentification" list="productIdentificationList">
+                        <econdition field-name="productId" from="shipmentItem.productId"/>
+                        <date-filter/>
+                    </entity-find>
+
+                    <!-- Prepare the shipmentItemsMap -->
+                    <set field="shipmentItemsMap" from="shipmentItem.findAll { it.value != null }.sort() +
+                        [shipmentId:shipmentItem.shipmentId, shipmentItemSeqId:shipmentItem.shipmentItemSeqId,
+                        shipmentReceipts:shipmentItemReceipts.getPlainValueList(0),productIdentifications:productIdentificationList]"/>
+
+                    <!-- Prepare list with the shipment items for a shipmentId -->
+                    <script>
+                        shipmentItemsList.add(shipmentItemsMap)
+                    </script>
+
+
+                    <!-- Create record of ShipmentItemHistory to keep logs for the Shipment Receipt Feed -->
+                    <!-- History is created for each Shipment Item of a Shipment instead of only Shipment Receipts,
+                        with the assumption that the shipment items of a shipment can only be received once.
+                        For example, if a shipment contains 3 items and 1 item is received today, then the shipment
+                        is eligible for the Shipment Receipt Feed, if we have sent all the three items in the feed
+                        then the shipment items that are not received yet, should not be eligible for the next feed
+                        since they have already been sent once, and to receive them, a new shipment will be created.
+                        Hence, it is important to create the history for all the shipment items of a shipment. -->
+                    <!-- NOTE:
+                         1. shipmentItemReceipts is iterated to keep the history creation in a generic way rather
+                            than fetching only first receipt.
+                         2. We have created history based on the Shipment Item Receipts, i.e. if the shipment
+                            receipt exists for the shipment item then create the history for that shipment item
+                            with their shipment receipts and if the shipment receipt does not exist then
+                            create the history for that shipment item with the empty receipt ID. -->
+                    <if condition="shipmentItemReceipts"><then>
+                        <iterate list="shipmentItemReceipts" entry="shipmentItemReceipt">
+                            <service-call name="create#co.hotwax.integration.shipment.ShipmentItemHistory" in-map="[shipmentId:shipmentItem.shipmentId,
+                                    shipmentItemSeqId:shipmentItem.shipmentItemSeqId, receiptId:shipmentItemReceipt.receiptId,
+                                    productId:shipmentItem.productId, quantity:shipmentItemReceipt.totalQuantityAccepted,
+                                    createdDate:nowDate, comments:'Shipment Item sent as part of Shipments Receipt Feed.']"/>
+                        </iterate>
+                    </then><else>
+                        <service-call name="create#co.hotwax.integration.shipment.ShipmentItemHistory" in-map="[shipmentId:shipmentItem.shipmentId,
+                                shipmentItemSeqId:shipmentItem.shipmentItemSeqId, productId:shipmentItem.productId,
+                                createdDate:nowDate, comments:'Shipment Item sent as part of Shipments Receipt Feed.']"/>
+                    </else></if>
+                </iterate>
+
+                <!-- Prepare the map with few fields of Shipment level, and shipment items list -->
+                <!-- NOTE: Added limited fields from the ShipmentAndItemAndReceipt view for the shipment level details -->
+                <set field="shipmentMap" from="[shipmentId:shipment.shipmentId,
+                        shipmentTypeId:shipment.shipmentTypeId, statusId:shipment.statusId,
+                        externalId:shipment.externalId, createdDate:shipment.createdDate,
+                        shipmentAttributes:shipmentAttributeList, shipmentItems:shipmentItemsList]"/>
+
+                <script>
+                    new ObjectMapper()
+                    .setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                    .writerWithDefaultPrettyPrinter().writeValue(jGenerator, shipmentMap)
+                </script>
+            </iterate>
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.info("Error preparing Shipments Receipt Feed file", e)
+                }
+            }
+            </script>
+
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and
+            send the file to sftp using send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[systemMessageTypeId:systemMessageTypeId, systemMessageRemoteId:systemMessageRemoteId,
+                    messageText:jsonFilePathRef, productStoreId:productStoreId]" out-map="shipmentsReceiptFeedSysMsgOut"/>
+
+            <return message="Completed the Shipments Receipt Feed file at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and
+                remote ${systemMessageRemoteId} saved response in messages ${shipmentsReceiptFeedSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+</services>

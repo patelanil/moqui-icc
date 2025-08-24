@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.6.0">
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsFinancialFeed">
+        <parameters parameterName="customParametersMap"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate the Brokered Order Items Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_BrokeredOrderItemsFeed">
+        <parameters parameterName="skipOrderAdjHistoryCreation" parameterValue="false"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate the Brokered Order Items Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeed">
+        <parameters parameterName="customParametersMap"/>
+    </moqui.service.job.ServiceJob>
+</entity-facade-xml>

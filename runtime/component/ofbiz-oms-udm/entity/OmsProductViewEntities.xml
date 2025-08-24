@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+
+    <view-entity entity-name="ProductStoreCatalogAndCategoryMember" package="co.hotwax.product.catalog.category">
+        <description>View entity for Product Store Catalog and Category Members.</description>
+        <member-entity entity-alias="PSC" entity-name="org.apache.ofbiz.product.store.ProductStoreCatalog"/>
+        <member-entity entity-alias="PCC" entity-name="org.apache.ofbiz.product.catalog.ProdCatalogCategory" join-from-alias="PSC">
+            <key-map field-name="prodCatalogId"/>
+        </member-entity>
+        <member-entity entity-alias="PCM" entity-name="org.apache.ofbiz.product.category.ProductCategoryMember" join-from-alias="PCC">
+            <key-map field-name="productCategoryId"/>
+        </member-entity>
+        <alias entity-alias="PSC" name="productStoreId"/>
+        <alias entity-alias="PSC" field="fromDate" name="pscFromDate"/>
+        <alias entity-alias="PSC" field="thruDate" name="pscThruDate"/>
+        <alias entity-alias="PCC" name="productCategoryId"/>
+        <alias entity-alias="PCC" name="prodCatalogCategoryTypeId"/>
+        <alias entity-alias="PCC" field="fromDate" name="pccFromDate"/>
+        <alias entity-alias="PCC" field="thruDate" name="pccThruDate"/>
+        <alias entity-alias="PCM" name="productId"/>
+        <alias entity-alias="PCM" field="fromDate" name="pcmFromDate"/>
+        <alias entity-alias="PCM" field="thruDate" name="pcmThruDate"/>
+    </view-entity>
+
+    <view-entity entity-name="ProductAssocAndFrom" package="org.apache.ofbiz.product.product">
+        <description>View for Product Assoc and Parent Product details</description>
+        <member-entity entity-alias="PA" entity-name="org.apache.ofbiz.product.product.ProductAssoc"/>
+        <member-entity entity-alias="P" entity-name="org.apache.ofbiz.product.product.Product" join-from-alias="PA">
+            <key-map field-name="productId"/></member-entity>
+        <alias-all entity-alias="PA"/>
+        <alias-all entity-alias="P"/>
+    </view-entity>
+
+    <view-entity entity-name="ProductAssocAndTo" package="org.apache.ofbiz.product.product">
+        <description>View for Product Assoc and Associated Product Details</description>
+        <member-entity entity-alias="PA" entity-name="org.apache.ofbiz.product.product.ProductAssoc"/>
+        <member-entity entity-alias="P" entity-name="org.apache.ofbiz.product.product.Product" join-from-alias="PA">
+            <key-map field-name="productIdTo" related="productId"/></member-entity>
+        <alias-all entity-alias="PA"/>
+        <alias-all entity-alias="P"><exclude field="productId"/></alias-all>
+    </view-entity>
+
+    <view-entity entity-name="ProductFeatureAndAppl" package="co.hotwax.product.feature">
+        <description>ProductFeature And ProductFeatureAppl View Entity</description>
+        <member-entity entity-alias="PFA" entity-name="org.apache.ofbiz.product.feature.ProductFeatureAppl"/>
+        <member-entity entity-alias="PF" entity-name="org.apache.ofbiz.product.feature.ProductFeature" join-from-alias="PFA">
+            <key-map field-name="productFeatureId"/>
+        </member-entity>
+        <alias-all entity-alias="PFA"/>
+        <alias-all entity-alias="PF"/>
+    </view-entity>
+
+    <view-entity entity-name="ProductContentAndInfo" package="org.apache.ofbiz.product.product">
+        <description>ProductContent, Content and DataResource and ElectronicText View</description>
+        <member-entity entity-alias="PC" entity-name="org.apache.ofbiz.product.product.ProductContent"/>
+        <member-entity entity-alias="CO" entity-name="org.apache.ofbiz.content.content.Content" join-from-alias="PC">
+            <key-map field-name="contentId"/>
+        </member-entity>
+        <member-entity entity-alias="DR" entity-name="org.apache.ofbiz.content.data.DataResource" join-from-alias="CO">
+            <key-map field-name="dataResourceId"/>
+        </member-entity>
+        <member-entity entity-alias="ELT" entity-name="org.apache.ofbiz.content.data.ElectronicText" join-from-alias="DR">
+            <key-map field-name="dataResourceId"/>
+        </member-entity>
+        <alias-all entity-alias="PC"/>
+        <alias-all entity-alias="CO"/>
+        <alias-all entity-alias="DR" prefix="dr"/>
+        <alias-all entity-alias="ELT"/>
+    </view-entity>
+</entities>

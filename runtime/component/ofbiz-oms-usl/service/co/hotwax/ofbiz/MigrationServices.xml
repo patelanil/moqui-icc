@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- NOTE: Configured the migration service to update the 'inventoryCountItemStatusId' service job parameter name in template_generate_InventoryCycleCountVarianceFeed service job to align with the upcoming release tag. -->
+    <!-- Migration service for v1.6.7 -->
+    <service verb="migrate" noun="InventoryCycleCountFeed">
+        <description>
+            Service to update the name of the "inventoryCountItemStatusId" parameter in the template_generate_InventoryCycleCountVarianceFeed service jobs.
+        </description>
+        <actions>
+            <!-- Fetch the Services Jobs Name -->
+            <entity-find entity-name="moqui.service.job.ServiceJob" list="parentServiceJobList">
+                <econdition field-name="parentJobName" value="template_generate_InventoryCycleCountVarianceFeed"/>
+            </entity-find>
+
+            <if condition="parentServiceJobList?.first?.parentJobName">
+                <!-- Update template_generate_InventoryCycleCountVarianceFeed service job  -->
+                <service-call name="store#moqui.service.job.ServiceJobParameter"
+                        in-map="[jobName:parentServiceJobList?.first?.parentJobName, parameterName:'inventoryCountItemStatusId',
+                        parameterValue:'INV_COUNT_COMPLETED']"/>
+            </if>
+
+            <iterate list="parentServiceJobList" entry="parentServiceJob">
+                <!-- Update clone template_generate_InventoryCycleCountVarianceFeed service job  -->
+                <service-call name="store#moqui.service.job.ServiceJobParameter"
+                        in-map="[jobName:parentServiceJob.jobName, parameterName:'inventoryCountItemStatusId',
+                        parameterValue:'INV_COUNT_COMPLETED']"/>
+            </iterate>
+        </actions>
+    </service>
+
+    <!--Configured the migration service to add the 'statusIds' service job parameter name in generate_ReturnsFinancialFeed service job and its cloned jobs. -->
+    <service verb="migrate" noun="ReturnsFinancialFeed">
+        <description>
+            Service to add the "statusIds" parameter in the generate_ReturnsFinancialFeed service jobs and other clone jobs.
+        </description>
+        <actions>
+            <!--Update the template job for ReturnsFinancialFeed -->
+            <service-call name="store#moqui.service.job.ServiceJobParameter"
+                in-map="[jobName:'generate_ReturnsFinancialFeed', parameterName:'statusIds',
+                parameterValue:'RETURN_COMPLETED']"/>
+            <!-- Fetch the cloned Service Jobs with parentJobName is generate_ReturnsFinancialFeed -->
+            <entity-find entity-name="moqui.service.job.ServiceJob" list="cloneServiceJobsList">
+                <econdition field-name="parentJobName" value="generate_ReturnsFinancialFeed"/>
+            </entity-find>
+            <iterate list="cloneServiceJobsList" entry="cloneServiceJob">
+                <!-- Update clone generate_ReturnsFinancialFeed service job  -->
+                <service-call name="store#moqui.service.job.ServiceJobParameter"
+                    in-map="[jobName:cloneServiceJob.jobName, parameterName:'statusIds',
+                    parameterValue:'RETURN_COMPLETED']"/>
+            </iterate>
+        </actions>
+    </service>
+    <service verb="migrate" noun="SequenceValueItem">
+        <description>Migrate the OMS sequence to moqui sequence value item entity</description>
+        <actions>
+            <entity-find entity-name="org.apache.ofbiz.entity.sequence.OmsSequenceValueItem" list="sequenceValueItems">
+                <econdition field-name="seqId" operator="is-not-null"/>
+            </entity-find>
+            <!-- Set the default bank size to 100000 as per moqui configuration-->
+            <set field="defaultBank" value="100000" type="Long"/>
+            <iterate list="sequenceValueItems" entry="sequenceValueItem">
+                <log level="info" message="Create SequenceValueItem for oms record ${sequenceValueItem}"/>
+                <!-- Check the entity definition in moqui, if entity not defined in moqui skip the record-->
+                <set field="isEntityDefined" from="ec.entityFacade.isEntityDefined(sequenceValueItem.seqName)"/>
+                <if condition="isEntityDefined">
+                    <set field="entityDef" from="ec.entity.getEntityDefinition(sequenceValueItem.seqName)"/>
+                    <!-- Check the moqui SequenceValueItem record for the entity seqName -->
+                    <entity-find-one entity-name="moqui.entity.SequenceValueItem"  value-field="maargEntitySeq">
+                        <field-map field-name="seqName" from="entityDef.getFullEntityName()"/>
+                    </entity-find-one>
+                    <!-- If moqui SequenceValueItem record already exists, check for updated value if needed update the value -->
+                    <if condition="maargEntitySeq">
+                        <if condition="maargEntitySeq.seqNum">
+                            <if condition="sequenceValueItem.seqId > maargEntitySeq.seqNum">
+                                <set field="newSeqNum" from="sequenceValueItem.seqId + 100" type="Long"/>
+                                <else>
+                                    <set field="newSeqNum" from="maargEntitySeq.seqNum" type="Long"/>
+                                </else>
+                            </if>
+                        <else>
+                            <set field="newSeqNum" from="defaultBank" type="Long"/>
+                        </else>
+                        </if>
+                        <if condition="maargEntitySeq.seqNum != newSeqNum">
+                            <service-call name="update#moqui.entity.SequenceValueItem" in-map="maargEntitySeq + ['seqNum': newSeqNum]" ignore-error="true" transaction="force-new" disable-authz="true"/>
+                            <log level="info" message="Updated ${entityDef.getFullEntityName()} sequence form ${maargEntitySeq.seqNum} to ${newSeqNum}"/>
+                        <else>
+                            <log level="info" message="Ignoring ${entityDef.getFullEntityName()} sequence as both sequence are same ${newSeqNum}"/>
+                        </else>
+                        </if>
+                    <else>
+                        <!-- If moqui SequenceValueItem record not found create new record with default bank size -->
+                        <service-call name="create#moqui.entity.SequenceValueItem" in-map="['seqName': entityDef.getFullEntityName(), 'seqNum': defaultBank]" ignore-error="true" transaction="force-new" disable-authz="true"/>
+                        <log level="info" message="Created ${entityDef.getFullEntityName()} sequence form ${sequenceValueItem.seqId} to ${defaultBank}"/>
+                    </else>
+                    </if>
+                <else>
+                    <log level="error" message="No entity definition found for entity ${sequenceValueItem.seqName}"/>
+                </else>
+                </if>
+            </iterate>
+        </actions>
+    </service>
+    <service verb="load" noun="OmsMigratedData">
+        <description>Service to load the migrated data from oms to moqui </description>
+        <actions>
+            <script>
+                import org.moqui.entity.EntityDataLoader
+
+                def dataFiles = ['component://ofbiz-oms-udm/data/CurrencyData.xml',
+                'component://ofbiz-oms-udm/data/UnitData.xml',
+                'component://ofbiz-oms-udm/upgrade/DbMergeUpgradeData.xml',
+                'component://ofbiz-oms-udm/data/GeoData.xml',
+                'component://ofbiz-oms-udm/data/GeoData_AE.xml',
+                'component://ofbiz-oms-udm/data/GeoData_AU.xml',
+                'component://ofbiz-oms-udm/data/GeoData_BG.xml',
+                'component://ofbiz-oms-udm/data/GeoData_BR.xml',
+                'component://ofbiz-oms-udm/data/GeoData_CA.xml',
+                'component://ofbiz-oms-udm/data/GeoData_CH.xml',
+                'component://ofbiz-oms-udm/data/GeoData_CN.xml',
+                'component://ofbiz-oms-udm/data/GeoData_CO.xml',
+                'component://ofbiz-oms-udm/data/GeoData_CR.xml',
+                'component://ofbiz-oms-udm/data/GeoData_DE.xml',
+                'component://ofbiz-oms-udm/data/GeoData_ES.xml',
+                'component://ofbiz-oms-udm/data/GeoData_FR.xml',
+                'component://ofbiz-oms-udm/data/GeoData_GT.xml',
+                'component://ofbiz-oms-udm/data/GeoData_HN.xml',
+                'component://ofbiz-oms-udm/data/GeoData_IE.xml',
+                'component://ofbiz-oms-udm/data/GeoData_IL.xml',
+                'component://ofbiz-oms-udm/data/GeoData_IN.xml',
+                'component://ofbiz-oms-udm/data/GeoData_IT.xml',
+                'component://ofbiz-oms-udm/data/GeoData_JP.xml',
+                'component://ofbiz-oms-udm/data/GeoData_MX.xml',
+                'component://ofbiz-oms-udm/data/GeoData_MY.xml',
+                'component://ofbiz-oms-udm/data/GeoData_NI.xml',
+                'component://ofbiz-oms-udm/data/GeoData_NL.xml',
+                'component://ofbiz-oms-udm/data/GeoData_NZ.xml',
+                'component://ofbiz-oms-udm/data/GeoData_PL.xml',
+                'component://ofbiz-oms-udm/data/GeoData_SV.xml',
+                'component://ofbiz-oms-udm/data/GeoData_TH.xml',
+                'component://ofbiz-oms-udm/data/GeoData_UK.xml',
+                'component://ofbiz-oms-udm/data/GeoData_US.xml'
+                ]
+
+                EntityDataLoader edl = ec.entity.makeDataLoader()
+                .disableEntityEca(true).disableAuditLog(true)
+                .disableDataFeed(true)
+                .transactionTimeout(7200)
+                dataFiles.each {dataFile ->
+                    edl.location(dataFile)
+                }
+                recordsLoaded = edl.load()
+            </script>
+            <log message="Records loaded ${recordsLoaded}"/>
+        </actions>
+    </service>
+</services>

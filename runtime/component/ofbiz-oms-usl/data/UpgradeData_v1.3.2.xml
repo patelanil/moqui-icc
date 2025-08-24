@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.3.2">
+
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsFinancialFeed">
+        <parameters parameterName="returnChannelEnumId"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- System Message Type for In Store Returns Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InStoreReturnsFinancialFeed"
+             description="Generate HotWax Returns Financial Feed for In-Store Returns"
+             consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+             sendPath="/home/${sftpUsername}/hotwax/financial-feed/InStoreReturns/${productStoreId}-InStoreReturnsFinancialFeed-${systemMessageId}-${dateTime}.json"
+             sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Ecommerce Returns Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="EcomReturnsFinancialFeed"
+             description="Generate HotWax Returns Financial Feed for Ecommerce Returns"
+             consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+             sendPath="/home/${sftpUsername}/hotwax/financial-feed/EcomReturns/${productStoreId}-EcomReturnsFinancialFeed-${systemMessageId}-${dateTime}.json"
+             sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+</entity-facade-xml>

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+-->
+
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="Find Config" default-menu-index="1">
+    <transition name="dataManagerConfig"><default-response url="../DataManagerConfigView"/></transition>
+    <transition name="createDataManagerConfig">
+        <service-call name="create#co.hotwax.datamanager.DataManagerConfig"/>
+        <default-response/>
+    </transition>
+    <widgets>
+        <container-dialog id="AddDataManagerConfig" button-text="Add" title="Add Data Manager Config">
+            <form-single name="AddDataManagerConfig" transition="createDataManagerConfig">
+                <field name="configId"><default-field><text-line/></default-field></field>
+                <field name="importServiceName"><default-field><text-line/></default-field></field>
+                <field name="description"><default-field><text-line/></default-field></field>
+                <field name="executionModeId">
+                    <default-field>
+                        <drop-down allow-empty="true">
+                            <entity-options>
+                                <entity-find entity-name="moqui.basic.Enumeration" cache="true">
+                                    <econdition field-name="enumTypeId" value="DMC_EXEC_MODE"/>
+                                </entity-find>
+                            </entity-options>
+                        </drop-down>
+                    </default-field>
+                </field>
+                <field name="multiThreading"><default-field>
+                    <drop-down allow-empty="true">
+                        <option key="Y" text="Y"/>
+                        <option key="N"/>
+                    </drop-down>
+                </default-field></field>
+                <field name="priority"><default-field><text-line/></default-field></field>
+                <field name="save"><default-field><submit/></default-field></field>
+            </form-single>
+        </container-dialog>
+        <form-list name="DataManagerConfigList" list="dataManagerConfigs" skip-form="true" show-page-size="true"  header-dialog="true" >
+            <entity-find entity-name="co.hotwax.datamanager.DataManagerConfig" list="dataManagerConfigs">
+                <search-form-inputs default-order-by="priority desc"/>
+            </entity-find>
+            <field name="configId">
+                <header-field show-order-by="case-insensitive"><text-find size="20"/></header-field>
+                <default-field><link url="dataManagerConfig" link-type="anchor" text="${configId}"/></default-field>
+            </field>
+            <field name="importServiceName">
+                <header-field show-order-by="case-insensitive"><text-find size="20"/></header-field>
+                <default-field><display/></default-field>
+            </field>
+            <field name="description">
+                <header-field show-order-by="case-insensitive"><text-find size="20"/></header-field>
+                <default-field><display/></default-field>
+            </field>
+            <field name="executionModeId">
+                <header-field>
+                    <drop-down allow-empty="true">
+                        <entity-options>
+                            <entity-find entity-name="moqui.basic.Enumeration" cache="true">
+                                <econdition field-name="enumTypeId" value="DMC_EXEC_MODE"/>
+                            </entity-find>
+                        </entity-options>
+                    </drop-down>
+                </header-field>
+                <default-field>
+                    <display-entity entity-name="moqui.basic.Enumeration" key-field-name="enumId" default-text="Queue" text="${description}"/>
+                </default-field>
+            </field>
+            <field name="multiThreading">
+                <header-field show-order-by="true">
+                    <drop-down allow-empty="true">
+                        <option key="Y" text="Y"/>
+                        <option key="N"/>
+                    </drop-down>
+                </header-field>
+                <conditional-field condition="multiThreading == null">
+                    <display text="N"/>
+                </conditional-field>
+                <conditional-field condition="multiThreading != null">
+                    <display/>
+                </conditional-field>
+            </field>
+            <field name="priority">
+                <header-field show-order-by="true"/>
+                <default-field><display/></default-field>
+            </field>
+            <field name="findButton">
+            <header-field title="Find"><submit/></header-field>
+                <default-field title=" ">
+                </default-field>
+            </field>
+        </form-list>
+    </widgets>
+</screen>

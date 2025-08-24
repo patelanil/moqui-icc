@@ -1,0 +1,1612 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- The service will generate Json including Shopify inventory details for below fields:
+        1. productStoreId
+        2. productId
+        3. shopifyProductId
+        4. shopifyInventoryItemId
+        5. sku - fetched from Product.internalName
+        6. computedLastInventoryCount - sum(ProductFacility.computedInventoryCount), atp after deducting facility minimumStock
+        7. updatedDate - max(ProductFacility.lastUpdatedStamp) for this implementation
+        8. facilityId - will be null for this implementation, not included in select fields of view
+        9. facilityTypeId - will be null for this implementation, not included in select fields of view
+        10. storeName
+        11. storeExternalId
+        12. facilityGroupTypeId - field is used for adding condition to include Online Facility Group,
+                will be null for this implementation, not included in select fields of view
+        13. facilityGroupId - will be null for this implementation, not included in select fields of view
+        14. facilityGroupFromDate - used in date filtering for Facility Group Members in the view itself,
+                will be null for this implementation, not included in select fields of view
+        15. facilityGroupThruDate - used in date filtering for Facility Group Members in the view itself,
+                will be null for this implementation, not included in select fields of view
+        16. threshold - ProductFacility.minimumStock where facilityTypeId is CONFIGURATION
+        17. preOrderQueue - All the open orders on facility type PRE_ORDER
+        18. backOrderQueue - All the open orders on facility type BACKORDER
+        19. virtualQueue - All the open orders where facility parent type id is VIRTUAL_FACILITY
+        20. productIdentifications - list of map for all Product Identifications
+        -->
+    <!-- For custom implementations, this Feed can be transformed to send the atp based on different business
+         rules on preOrderQueue, backOrderQueue, virtualQueue.
+         Example Scenario:
+         1. We have Brokering Queue in HC for which the requirement is that we should not send inventory for
+            this, instead deduct it from the computedLastInventoryCount.
+         2. If we have non empty preOrderQueue or backOrderQueue, then we should not send the the online inventory
+            to be 0, as priority should be given to pre/back orders. -->
+    <!-- NOTE: If products are added/removed from pre-order or backorder category then Inventory Feed will not be generated.
+         This is because there is no change in inventory due to adding/removing poduct from category, so this is not a valid rule 
+         to be considered for considering the product eligible for the Inventory Feed in the next run.
+         The Inventory feed is generated for the products that have a change in inventory due to various reasons like product
+         turned on/off, facility turned on/off or inventory reservations for orders. -->
+    <!-- IMP This service supports the fetch of inventory details using the Facility Group ID. Earlier this was done using Facility Group Type ID as SHOPIFY_GROUP_FAC which was considered the Online Facilty Group for sending the inventory to Shopify.
+         With new requirement that not every channel uses the same inventory pool, support is added in OMS to create pools on demand and link them to the channels. Eg. Shopify channel is allowed to sell warehouse and store inventory while Macy’s channel is only allowed to sell warehouse inventory. To support this, they each need their own “pools” of inventory.
+         So now, 
+         1. For Shopify channel, a new Facility Group will be created in OMS with Facility Group Type Id as CHANNEL_FAC_GROUP and all the facilities of the products for which inventory needs to be sent to Shopify will be member for this. 
+         2. Each channel can have its own threshold which will be set up using CONFIGURATION type facility for each Facility Group. It may be possible that each channel can have 1 or more CONFIGURATION type facilities.
+         3. Earlier the check on facilityGroupTypeId = SHOPIFY_GROUP_FAC and facilityTypeId = CONFIGURATION was added in the ShopifyProductInventory but now due to introduction of channels, the checks are removed and facilityGroupId support added in the service to prepare the feed. For including change due to thresold update, the Facility Ids for type CONFIGURATION of the Facility Group will be fetched and used in the service logic itself. -->
+    <service verb="generate" noun="ShopifyInventoryFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>
+            Service to generate Shopify Inventory Feed from HotWax.
+        </description>
+        <in-parameters>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of Product Store Ids to fetch Inventory details for products of a Product Store.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+            <parameter name="productId">
+                <description>Parameter to fetch Inventory details for a specific product.</description>
+            </parameter>
+            <parameter name="sinceDate">
+                <description>Parameter to fetch Inventory details updated after the specified date.</description>
+            </parameter>
+            <parameter name="jobName">
+                <description>The name of the scheduled job to fetch the last run time for preparing the Inventory Delta Feed.</description>
+            </parameter>
+            <parameter name="skipLastRunTimeUpdate" type="Boolean" default="false">
+                <description>skip the LastRunTime update,mainly used while debugging</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send the Inventory Feed.</description>
+            </parameter>
+            <parameter name="facilityGroupId" required="true">
+                <description>
+                    Parameter to fetch Inventory details for a specific facility group ID. Here Facility Group ID refers to the Channel (Shopify in this case) for which inventory needs to be sent. For every channel, Facility Group Type will always be CHANNEL_FAC_GROUP, and particular channel ID i.e. facilityGroupId needs to be sent here.
+                    For this parameter, set the Facilty Group ID of the Shopify channel.
+                </description>
+            </parameter>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Shopify Inventory Feed.</description>
+            </parameter>
+            <parameter name="fieldsToSelect" default-value="productStoreId,productId,shopifyProductId,shopifyInventoryItemId,sku,computedLastInventoryCount,storeName,storeExternalId">
+                <description>Fields to select for generating Shopify Inventory Feed.</description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <!-- TODO: Add the parameter and handling for buffer minutes so that we fetch the inventory updates
+                few minutes before as per the value of the parameter. -->
+
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <!-- We can use last run time to fetch the records updated after the last service job run -->
+            <!-- Check the parameter used for storing the last inventory feed run time -->
+            <entity-find-one entity-name="moqui.service.job.ServiceJobParameter" value-field="lastRunParam">
+                <field-map field-name="jobName"/>
+                <field-map field-name="parameterName" value="lastRunTime"/>
+            </entity-find-one>
+
+            <!-- Set sinceDate using the lastRunTime, if it is set, fetch updates from
+                   that time, else it will be null -->
+            <if condition="!sinceDate">
+                <set field="sinceDate" from="lastRunParam?.parameterValue"/>
+            </if>
+            <log message="Generating HotWax Inventory Feed file of Shopify for Product Store ${productStoreIds} since ${sinceDate}"/>
+
+            <!-- Fetch the eligible products from the ProductStoreFacilityAndShopifyInventory view -->
+            <!-- NOTE: No explicit check added on Configuration type facility when fetching eligible products for the feed, this
+                 is because, it gets included as part of eligible records from the view since CONFIGURATION type facilities will now
+                 be part of the Facility group for each channel.
+                 Hence while fetching the change in inventory if threshold is updated for a product, the feed will still pick it up
+                 as a change and include products in the feed to send the updated inventory to Shopify.
+                The Facility ids will be used as a condition when threshold needs to be prepared -->
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                productInventory_find = ec.entity.find("co.hotwax.shopify.ProductStoreFacilityAndShopifyInventory")
+                if(productId) productInventory_find.condition("productId", productId)
+                if(productStoreIds) productInventory_find.condition("productStoreId", EntityCondition.ComparisonOperator.IN, productStoreIds)
+
+                productInventory_find.havingCondition(ec.entity.conditionFactory.makeCondition(
+                        [ec.entity.conditionFactory.makeCondition("facilityGroupTypeId", EntityCondition.ComparisonOperator.EQUALS, "CHANNEL_FAC_GROUP"),
+                        ec.entity.conditionFactory.makeCondition("facilityGroupId", EntityCondition.ComparisonOperator.EQUALS, facilityGroupId)],
+                        EntityCondition.JoinOperator.AND))
+
+                    <!-- Condition added on sinceDate to be greater then max of either ProductFacility
+                         or FacilityGroupMember, this is done to include the scenario of facility turn on/off
+                         as that is an update on FacilityGroupMember entity. -->
+                    <!-- NOTE: combine="or" with having-conditions did not give exepected results, so
+                         used or condition in econditions, TODO need to explore the reason -->
+                if(sinceDate) productInventory_find.havingCondition(ec.entity.conditionFactory.makeCondition(
+                           [ec.entity.conditionFactory.makeCondition("updatedDate", EntityCondition.ComparisonOperator.GREATER_THAN, sinceDate),
+                            ec.entity.conditionFactory.makeCondition("facilityGroupMemberUpdatedDate", EntityCondition.ComparisonOperator.GREATER_THAN, sinceDate)],
+                            EntityCondition.JoinOperator.OR
+                           )
+                          )
+                productInventory_find.selectField("productStoreId,productId,shopifyProductId,shopifyInventoryItemId,sku,storeName,storeExternalId,updatedDate,facilityGroupMemberUpdatedDate,facilityGroupTypeId,facilityGroupId")
+
+                // Using try-with-resources to automatically close the EntityListIterator 'productInventoryItr'
+                try (productInventoryItr = productInventory_find.iterator()) {
+            </script>
+
+            <!-- If no records in ProductStoreFacilityAndShopifyInventory, then don't generate the file -->
+            <if condition="!productInventoryItr.hasNext()">
+                <return message="No eligible records for Shopify Inventory Feed at ${nowDate}, not generating the HotWax Shopify Inventory Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds or more than one productStoreIds are passed in the list,
+               then set the productStoreId to a default value as the feed being generated contains
+               the inventory details of products for more than one product store id. -->
+            <!-- If productStoreIds list contains one value then set the productStoreId from the list. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Shopify Inventory JSON File Path -->
+            <!-- Using the productStoreId in the file name as well to help in debugging. -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+            [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS'),
+             productStoreId:productStoreId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Inventory Feed file  -->
+            <script>
+                try {
+                    //json file
+                    File invFeedFile = new File(jsonFilePath)
+                    if (!invFeedFile.parentFile.exists()) invFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, invFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <!-- Fetch Configuration type Facilities from FacilityGroupAndMember View for the facilityGroupId. -->
+            <!-- NOTE: For multichannel inventory, each channel means new Facility Group and each Facility Group can
+                 have its Configuration type facility to manage separate thresholds.  -->
+            <entity-find entity-name="co.hotwax.facility.FacilityGroupAndMember" list="configurationFacilityList" distinct="true" cache="true">
+                <econdition field-name="facilityGroupId"/>
+                <econdition field-name="facilityTypeId" value="CONFIGURATION"/>
+                <date-filter/>
+                <select-field field-name="facilityId"/>
+            </entity-find>
+
+            <!-- Prepare the list of the Configuration facilities for the specific facility group. -->
+            <set field="configurationFacilityIds" from="configurationFacilityList?.facilityId"/>
+
+            <iterate list="productInventoryItr" entry="inventoryItem">
+                <!-- NOTE: Used entity-find instead of entity-find-count for fetching information for
+                    Pre Order, Back Order and Virtual Queues as 3 separate calls of entity-find-count
+                    returned transaction timeout even when 2 hrs added in the service, the code is
+                    commented down for reference and future analysis of this scenario -->
+                <entity-find entity-name="co.hotwax.financial.SalesOrderView" list="orderItemDetails">
+                    <econdition field-name="productId" from="inventoryItem.productId"/>
+                    <econdition field-name="itemStatusId" operator="in" value="ITEM_APPROVED,ITEM_HOLD"/>
+                    <econditions combine="or">
+                        <econdition field-name="facilityTypeId" operator="in" value="PRE_ORDER,BACKORDER"/>
+                        <econdition field-name="parentFacilityTypeId" value="VIRTUAL_FACILITY"/>
+                    </econditions>
+                    <select-field field-name="orderId,productId,facilityTypeId,parentFacilityTypeId"/>
+                </entity-find>
+
+                <set field="preOrderQueue" from="orderItemDetails.findAll({ 'PRE_ORDER'.equals(it.facilityTypeId) })"/>
+                <set field="backOrderQueue" from="orderItemDetails.findAll({ 'BACKORDER'.equals(it.facilityTypeId) })"/>
+                <set field="virtualQueue" from="orderItemDetails.findAll({ 'VIRTUAL_FACILITY'.equals(it.parentFacilityTypeId) })"/>
+
+                <!-- Fetch all open orders count for facility type PRE_ORDER -->
+                <!--<entity-find-count entity-name="co.hotwax.financial.SalesOrderDetails" count-field="preOrderCount">
+                    <econdition field-name="productId" from="inventoryItem.productId"/>
+                    <econdition field-name="facilityTypeId" value="PRE_ORDER"/>
+                    <econdition field-name="itemStatusId" value="ITEM_APPROVED"/>
+                </entity-find-count>
+
+                &lt;!&ndash; Fetch all open orders count for facility type BACKORDER &ndash;&gt;
+                <entity-find-count entity-name="co.hotwax.financial.SalesOrderDetails" count-field="backOrderCount">
+                    <econdition field-name="productId" from="inventoryItem.productId"/>
+                    <econdition field-name="facilityTypeId" value="BACKORDER"/>
+                    <econdition field-name="itemStatusId" value="ITEM_APPROVED"/>
+                </entity-find-count>
+
+                &lt;!&ndash; Fetch all open orders count for parentFacilityTypeId BACKORDER &ndash;&gt;
+                <entity-find-count entity-name="co.hotwax.financial.SalesOrderDetails" count-field="virtualQueueCount">
+                    <econdition field-name="productId" from="inventoryItem.productId"/>
+                    <econdition field-name="parentFacilityTypeId" value="VIRTUAL_FACILITY"/>
+                    <econdition field-name="itemStatusId" value="ITEM_APPROVED"/>
+                </entity-find-count>-->
+
+                <!-- Fetch threshold value from Product Facility with facilityTypeId as CONFIGURATION -->
+                <entity-find entity-name="co.hotwax.product.facility.ProductFacilityAndType" list="productFacilityType" limit="1">
+                    <econdition field-name="productId" from="inventoryItem.productId"/>
+                    <econdition field-name="facilityId" operator="in" from="configurationFacilityIds"/>
+                </entity-find>
+                <set field="threshold" from="productFacilityType.isEmpty() ? 0 : productFacilityType[0].minimumStock" type="Integer"/>
+
+                <!-- Get all Good Identifications for Product -->
+                <entity-find entity-name="org.apache.ofbiz.product.product.GoodIdentification" list="goodIdentificationList">
+                    <econdition field-name="productId" from="inventoryItem.productId"/>
+                    <date-filter/>
+                </entity-find>
+
+                <!-- Fetching the computedLastInventoryCount from the view, this count excludes the turned OFF Products and turned OFF facilities -->
+                <!-- NOTE: The challenge with handling this in first entity find on ProductStoreFacilityAndShopifyInventory
+                     view is that if we add the date filter there, we will not get the the products that have a change
+                     as date-filter will remove the expired FacilityGroupMember's records irrespective of the condition on
+                     facilityGroupMemberUpdatedDate.
+                     The condition on allowBrokering is added here so that if allowBrokering is set to N, then
+                     those records from the view are not included to get the computedLastInventoryCount. -->
+                <!-- For products associated with single facility, if that facility is turned off then an empty list is returned
+                 and computedLastInventoryCount is send as 0. -->
+                <!-- TODO test feed generation with bulk data - around 100k records -->
+                <entity-find entity-name="co.hotwax.shopify.ProductStoreFacilityAndShopifyInventory" list="productInventoryList">
+                    <econdition field-name="productId" from="inventoryItem.productId"/>
+                    <econdition field-name="productStoreId" from="inventoryItem.productStoreId"/>
+                    <econditions combine="or">
+                        <econdition field-name="allowBrokering" operator="is-null"/>
+                        <econdition field-name="allowBrokering" operator="not-equals" value="N"/>
+                    </econditions>
+                    <econditions>
+                        <econdition field-name="facilityGroupTypeId" value="CHANNEL_FAC_GROUP"/>
+                        <econdition field-name="facilityGroupId"/>
+                    </econditions>
+                    <date-filter from-field-name="facilityGroupFromDate" thru-field-name="facilityGroupThruDate"/>
+                    <select-field field-name="${fieldsToSelect}"/>
+                </entity-find>
+
+                <!-- Prepare isPreOrder and isBackOrder fields -->
+                <!-- Fetch the pre-order and backorder product categories for the product from ProductStoreCatalogCategoryMember view -->
+                <entity-find entity-name="co.hotwax.product.catalog.category.ProductStoreCatalogAndCategoryMember" list="productCategoryMemberList">
+                    <econdition field-name="productId" from="inventoryItem.productId"/>
+                    <econdition field-name="productStoreId" from="inventoryItem.productStoreId"/>
+                    <econdition field-name="prodCatalogCategoryTypeId" operator="in" value="PCCT_PREORDR,PCCT_BACKORDER"/>
+                    <date-filter from-field-name="pscFromDate" thru-field-name="pscThruDate"/>
+                    <date-filter from-field-name="pccFromDate" thru-field-name="pccThruDate"/>
+                    <date-filter from-field-name="pcmFromDate" thru-field-name="pcmThruDate"/>
+                </entity-find>
+
+                <set field="isPreOrder" from="productCategoryMemberList.find({'PCCT_PREORDR'.equals(it.prodCatalogCategoryTypeId)}) ? 'Y' : 'N'"/>
+                <set field="isBackOrder" from="productCategoryMemberList.find({'PCCT_BACKORDER'.equals(it.prodCatalogCategoryTypeId)}) ? 'Y' : 'N'"/>
+
+                <!-- Prepare the inventory map details -->
+                <set field="invMap" from="inventoryItem.getMap() + [threshold:threshold,
+                    preOrderQueue:preOrderQueue.size(), backOrderQueue:backOrderQueue.size(),
+                    virtualQueue:virtualQueue.size(), isPreOrder:isPreOrder, isBackOrder:isBackOrder,
+                    computedLastInventoryCount:productInventoryList?.first?.computedLastInventoryCount ?: 0,
+                    productIdentifications:goodIdentificationList]"/>
+
+                <script>
+                    new ObjectMapper()
+                        .setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                        .writerWithDefaultPrettyPrinter().writeValue(jGenerator, invMap)
+                </script>
+            </iterate>
+
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.error("Error preparing Shopify Inventory Feed file", e)
+                }
+            }
+            </script>
+
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and send the file to sftp
+             using the send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[systemMessageTypeId:systemMessageTypeId,
+                    systemMessageRemoteId:systemMessageRemoteId, messageText:jsonFilePathRef, productStoreId:productStoreId]"
+                    out-map="invFeedSystemMessageOut"/>
+
+            <!-- Based on the input of skipLastRunTimeUpdate, we can update the last Run time
+                   This will help in controlling the update of last run time if the job is run manually -->
+            <if condition="!skipLastRunTimeUpdate">
+                <!-- Set the current timestamp as the last inventory run time for next run -->
+                <service-call name="update#moqui.service.job.ServiceJobParameter"
+                        in-map="[jobName:lastRunParam.jobName, parameterName:lastRunParam.parameterName,
+                        parameterValue:nowDate]"/>
+            </if>
+            <return message="Created the HotWax Inventory Feed file of Shopify at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and
+                remote ${systemMessageRemoteId} saved response in messages ${invFeedSystemMessageOut.systemMessageId}"/>
+        </actions>
+    </service>
+
+    <service verb="generate" noun="InventoryDeltaFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>Service to generate Inventory Delta feed from HotWax.</description>
+        <in-parameters>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating the Inventory Delta Feed.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send the Inventory Delta Feed.</description>
+            </parameter>
+            <parameter name="jobName">
+                <description>The name of the scheduled job to fetch the last run time for preparing the Inventory Delta Feed.</description>
+            </parameter>
+            <parameter name="sinceDate">
+                <description>Parameter to fetch inventory updates after the specified date.</description>
+            </parameter>
+            <parameter name="skipLastRunTimeUpdate" type="Boolean" default="false">
+                <description>skip the LastRunTime update,mainly used while debugging</description>
+            </parameter>
+            <parameter name="eventTypeEnumId">
+                <description>Parameter to generate Inventory Delta Feed for specific order item events like brokered, rejected etc.</description>
+            </parameter>
+            <parameter name="facilityTypeId">
+                <description>Parameter to generate Inventory Delta Feed for specific facility type.</description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of Product Store Ids for generating Inventory Delta Feed.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <!-- We can use last inventory sync time to fetch the records updated after the last service job run -->
+            <!-- Check the parameter used for storing the last inventory sync time -->
+            <entity-find-one entity-name="moqui.service.job.ServiceJobParameter" value-field="lastSyncParam">
+                <field-map field-name="jobName"/>
+                <field-map field-name="parameterName" value="inventorySyncLastRunTime"/>
+            </entity-find-one>
+
+            <!-- Set sinceDate using the lastRunTime, if it is set, fetch updates from
+               that time, else it will be null -->
+            <if condition="!sinceDate">
+                <set field="sinceDate" from="lastSyncParam?.parameterValue"/>
+            </if>
+            <log message="Generating HotWax Inventory Delta Feed file, since date ${sinceDate}."/>
+
+            <!-- Fetch order items from OrderItemAndHistory to prepare Inventory Delta Feed -->
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.text.SimpleDateFormat
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                orderItems_find = ec.entity.find("co.hotwax.oms.OrderItemAndHistory")
+                if(eventTypeEnumId) orderItems_find.condition("eventTypeEnumId", eventTypeEnumId)
+                if(facilityTypeId) orderItems_find.condition("facilityTypeId", facilityTypeId)
+                if(productStoreIds) orderItems_find.condition("productStoreId", EntityCondition.ComparisonOperator.IN, productStoreIds)
+                if(sinceDate) orderItems_find.condition("createdDate", EntityCondition.ComparisonOperator.GREATER_THAN, sinceDate)
+
+                // Using try-with-resources to automatically close the EntityListIterator 'orderItems'
+                try (orderItems = orderItems_find.iterator()) {
+            </script>
+
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <!-- If no records in OrderItemAndHistory, then don't generate the file -->
+            <if condition="!orderItems.hasNext()">
+                <return message="No eligible records for Inventory Delta feed at ${nowDate}, not generating the HotWax Inventory Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds or more than one productStoreIds are passed in the list,
+               then set the productStoreId to a default value as the feed being generated contains the orders for more than one product store ids. -->
+            <!-- If productStoreIds list contains one value then set the productStoreId from the list. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Inventory Delta Feed JSON File Path -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+            [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss'),
+             productStoreId:productStoreId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Inventory Delta Feed file -->
+            <script>
+                try {
+                    //json file
+                    File invDeltaFeedFile = new File(jsonFilePath)
+                    if (!invDeltaFeedFile.parentFile.exists()) invDeltaFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, invDeltaFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+            <iterate list="orderItems" entry="orderItem">
+                <script>
+                    new ObjectMapper().setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                    .writerWithDefaultPrettyPrinter().writeValue(jGenerator, orderItem)
+                </script>
+            </iterate>
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.error("Error preparing Inventory Delta Feed file", e)
+                }
+                }
+            </script>
+
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and send the file to sftp
+             using the send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[messageText:jsonFilePathRef, systemMessageTypeId:systemMessageTypeId,
+                    systemMessageRemoteId:systemMessageRemoteId, productStoreId:productStoreId]" out-map="invDeltaFeedSysMsgOut"/>
+
+            <!-- Based on the input of skipLastRunTimeUpdate, we can update the last Run time
+                   This will help in controlling the update of last run time if the job is run manually -->
+            <if condition="!skipLastRunTimeUpdate">
+                <!-- Set the current timestamp as the last inventory run time for next run -->
+            <service-call name="update#moqui.service.job.ServiceJobParameter"
+                    in-map="[jobName:lastSyncParam.jobName, parameterName:lastSyncParam.parameterName,
+                        parameterValue:nowDate]"/>
+            </if>
+
+            <return message="Completed the HotWax Inventory Delta Feed file at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and remote ${systemMessageRemoteId} saved response in messages ${invDeltaFeedSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+    <!-- Wrapper service to prepare the filter parameters for generating the Inventory Item Variance Feed -->
+    <!-- The parameters of the service Inventory Item Variance will be prepared as per below scenarios,
+         Case 1: If no parameter is passed, then by default the core service to generate the feed
+                 will be called, and it will generate feed as per the job's last run time.
+
+         Case 2: If the reasonEnumIds and/or parentFacilityTypeIds is passed without any date, then
+                 the service will generate feed for only the passed Ids. These Ids will be get
+                 passed to the core service to generate the feed.
+                 Since lastRunTime will be set for the job, it is required to perform below steps
+                 i. Set skipLastRunTimeUpdate to true
+                 ii. Copy and save the value for lastRunTime Service Job Param somewhere, and remove
+                 the value from the ServiceJobParameter entity so that it does not always check
+                 after that time, as the passed Ids may be of some previous date for which we
+                 want to manually generate the feed.
+
+         Case 3: If fromDate and thruDate is passed, then the service will generate the feed
+                 between that date range only.
+
+         Case 4: If daysBefore value is passed, then the service will generate the feed from the
+                 nth(daysBefore value) till previous day.
+                Eg. If the feed is being generated on '2023-06-07 20:20:00' and daysBefore is
+                passed as '1', then the feed will be generated for the imports of "2023-06-06".
+                NOTE Here, the fromDate and thruDate will be prepared as '2023-06-05 23:59:59'
+                and '2023-06-06 23:59:59' respectively.
+                This is because the fromDate is exclusive and thruDate is inclusive in the core
+                service.  -->
+    <service verb="get" noun="InventoryItemVariance" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>
+            Service to prepare the required parameters for fetching the eligible records for
+            the Inventory Item Variance Feed. The HotWax JSON will be Variance wise.
+        </description>
+        <in-parameters>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Inventory Item Variance Feed.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send the Inventory Item Variance Feed.</description>
+            </parameter>
+            <parameter name="reasonEnumIds" type="List">
+                <description>
+                    Parameter to fetch Inventory Item Variance for specific variance reason IDs.
+                    This parameter accepts list or a single value, for passing the variance reason IDs as list,
+                    add values like - VAR_STOLEN, VAR_DAMAGED and for a single value use - VAR_STOLEN.
+                </description>
+            </parameter>
+            <parameter name="parentFacilityTypeIds" type="List">
+                <description>
+                    List of parent Facility Type Ids for generating Inventory Item Variance Feed.
+                    For passing the parent Facility Type Ids as list, add values like - PHYSICAL_STORE,DISTRIBUTION_CENTER,VIRTUAL_FACILITY and for single value use - PHYSICAL_STORE.
+                </description>
+            </parameter>
+            <parameter name="fromDate">
+                <description>
+                    Parameter to fetch records of Inventory Item Variance after a specific date.
+                    This parameter corresponds to the physicalInventoryDate of PhysicalInventory entity.
+                </description>
+            </parameter>
+            <parameter name="thruDate">
+                <description>
+                    Parameter to fetch records of Inventory Item Variance before a specific date.
+                    This parameter corresponds to the physicalInventoryDate of PhysicalInventory entity.
+                </description>
+            </parameter>
+            <parameter name="jobName">
+                <description>
+                    The name of the scheduled job to fetch the last run time for preparing the Inventory Item Variance Feed.
+                </description>
+            </parameter>
+            <parameter name="skipLastRunTimeUpdate" type="Boolean" default="false">
+                <description>skip the LastRunTime update,mainly used while debugging</description>
+            </parameter>
+            <parameter name="daysBefore" type="Integer">
+                <description>
+                    Parameter to generate Inventory Item Variance Feed for n previous days from today.
+                </description>
+            </parameter>
+            <parameter name="customParametersMap" type="Map">
+                <description>This map defines custom conditions to fetch Inventory Variances, allowing flexibility to add new conditions dynamically.
+                    This parameter expects map in a specific format including suffixes like *_op for operators and *_ic for case-insensitivity.
+                    Eg. If we want to exclude inventory variances for specific reasons, we can add map like {"varianceReasonId_op":"in","varianceReasonId_not":"Y","varianceReasonId":["VAR_LOST","MISMATCH"]}
+                    This will exclude the inventory variances for VAR_LOST and MISMATCH Variance Reason Ids.</description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <!-- set nowDate here to prepare the fromDate and thruDate if daysBefore is passed -->
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <if condition="daysBefore">
+                <!-- Subtract the (daysBefore + 1) from current max time to set it is as a fromDate, since
+                    the fromDate is exclusive in the core service -->
+                <set field="fromDate" from="ec.l10n.format(nowDate.toLocalDateTime().with(java.time.LocalTime.MAX).minus(daysBefore + 1, java.time.temporal.ChronoUnit.DAYS), 'yyyy-MM-dd HH:mm:ss.SSS')"/>
+                <!-- Here, subtracted '1' from the current max time to get the date-time of previous day to set the thruDate -->
+                <set field="thruDate" from="ec.l10n.format(nowDate.toLocalDateTime().with(java.time.LocalTime.MAX).minus(1, java.time.temporal.ChronoUnit.DAYS), 'yyyy-MM-dd HH:mm:ss.SSS')"/>
+            </if>
+
+            <service-call name="co.hotwax.ofbiz.InventoryServices.generate#InventoryItemVarianceFeed"
+                    in-map="context"/>
+        </actions>
+    </service>
+
+    <!-- TODO: Check to update the transaction-timeout value or the schedule of the service job as this service gets the inventory variance for the entire day and the number of records can be large -->
+    <service verb="generate" noun="InventoryItemVarianceFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>Service to generate Inventory Variance Feed.</description>
+        <in-parameters>
+            <parameter name="fromDate">
+                <description>
+                    Parameter to fetch records of Inventory Item Variance after a specific date.
+                    This parameter corresponds to the physicalInventoryDate of PhysicalInventory entity.
+                </description>
+            </parameter>
+            <parameter name="thruDate">
+                <description>
+                    Parameter to fetch records of Inventory Item Variance before a specific date.
+                    This parameter corresponds to the physicalInventoryDate of PhysicalInventory entity.
+                </description>
+            </parameter>
+            <parameter name="reasonEnumIds" type="List">
+                <description>
+                    Parameter to fetch Inventory Item Variance for specific variance reason IDs.
+                    This parameter accepts list or a single value, for passing the variance reason IDs as list,
+                    add values like - VAR_STOLEN, VAR_DAMAGED and for a single value use - VAR_STOLEN.
+                </description>
+            </parameter>
+            <parameter name="parentFacilityTypeIds" type="List">
+                <description>
+                    List of parent Facility Type Ids for generating Inventory Item Variance Feed.
+                    For passing the parent Facility Type Ids as list, add values like - PHYSICAL_STORE,DISTRIBUTION_CENTER,VIRTUAL_FACILITY and for single value use - PHYSICAL_STORE.
+                </description>
+            </parameter>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Inventory Variance Feed.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send Inventory Variance Feed.</description>
+            </parameter>
+            <parameter name="jobName">
+                <description>The name of the scheduled job to fetch the last run time for preparing the Inventory Variance Feed.</description>
+            </parameter>
+            <parameter name="skipLastRunTimeUpdate" type="Boolean" default="false">
+                <description>skip the LastRunTime update,mainly used while debugging</description>
+            </parameter>
+            <parameter name="customParametersMap" type="Map">
+                <description>
+                    This map defines custom conditions to fetch Inventory Variances, allowing flexibility to add new conditions dynamically.
+                    This parameter expects map in a specific format including suffixes like *_op for operators and *_ic for case-insensitivity.
+                    Eg. If we want to exclude inventory variances for specific reasons, we can add map like {"varianceReasonId_op":"in","varianceReasonId_not":"Y","varianceReasonId":["VAR_LOST","MISMATCH"]}
+                    This will exclude the inventory variances for VAR_LOST and MISMATCH Variance Reason Ids.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <!-- set nowDate here to prepare the lastRunTime of job for the next run -->
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <!-- We can use last run time to fetch the records updated after the last service job run -->
+            <!-- Check the parameter used for storing the last feed run time -->
+            <entity-find-one entity-name="moqui.service.job.ServiceJobParameter" value-field="lastRunParam">
+                <field-map field-name="jobName"/>
+                <field-map field-name="parameterName" value="lastRunTime"/>
+            </entity-find-one>
+
+            <!-- If no fromDate, then set fromDate using the lastRunTime if it exists and
+                 fetch updates after that time. -->
+            <if condition="!fromDate">
+                <set field="fromDate" from="lastRunParam?.parameterValue"/>
+            </if>
+
+            <log message="Generating Inventory Item Variance Feed file, from ${fromDate}, thru ${thruDate}."/>
+
+            <!-- TODO: Revisit the scenario for single product in multiple shops for a single product store. -->
+            <!-- NOTE: Removed distinct=true as we want to retain the format where UPCs can repeat.
+                Revisit this to check if distinct = true is needed or not. -->
+
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.text.SimpleDateFormat
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                itemVariance_find = ec.entity.find("co.hotwax.warehouse.ItemVarianceDetails")
+                .searchFormMap(customParametersMap, null, "", "", false)
+                if(reasonEnumIds) itemVariance_find.condition("reasonEnumId", EntityCondition.ComparisonOperator.IN, reasonEnumIds)
+                if(parentFacilityTypeIds) itemVariance_find.condition("parentFacilityTypeId", EntityCondition.ComparisonOperator.IN, parentFacilityTypeIds)
+                    <!-- NOTE:
+                         1. Here, for fromDate the operator used is "greater" because with lastRunTime,
+                         we would always want to fetch the records after that date to avoid sending
+                         duplicate records in the feeds.
+                         2. If the date is being passed from any wrapper service for this service, then
+                         it needs to be taken care of preparing the date value correctly to include all
+                         the required records to work with greater operator. -->
+                if(fromDate) itemVariance_find.condition("physicalInventoryDate", EntityCondition.ComparisonOperator.GREATER_THAN, fromDate)
+                if(thruDate) itemVariance_find.condition("physicalInventoryDate", EntityCondition.ComparisonOperator.LESS_THAN_EQUAL_TO, thruDate)
+
+                // Using try-with-resources to automatically close the EntityListIterator 'itemVarianceItr'
+                try (itemVarianceItr = itemVariance_find.iterator()) {
+            </script>
+
+            <!-- If no records in ItemVarianceDetails, then don't generate the file -->
+            <if condition="!itemVarianceItr.hasNext()">
+                <return message="No eligible records for Item Inventory Variance Feed at ${nowDate}, not generating the HotWax Inventory Feed file."/>
+            </if>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Inventory Item Variance Feed JSON File Path -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+            [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS')], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Inventory Item Variance Feed file -->
+            <script>
+                try {
+                    //json file
+                    File invVarianceFeedFile = new File(jsonFilePath)
+                    if (!invVarianceFeedFile.parentFile.exists()) invVarianceFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory();
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, invVarianceFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <iterate list="itemVarianceItr" entry="inventoryItem">
+
+                <!-- Get all Good Identifications for Product -->
+                <entity-find entity-name="org.apache.ofbiz.product.product.GoodIdentification" list="goodIdentificationList">
+                    <econdition field-name="productId" from="inventoryItem.productId"/>
+                    <date-filter/>
+                </entity-find>
+
+                <!-- Fetch the Parent Product details -->
+                <!-- NOTE: Parent Product details are not the generic data fields, here this is prepared as part of
+                     integration with the external system NetSuite, where the company uses the parent product name
+                     as part of product identifier. -->
+                <entity-find entity-name="org.apache.ofbiz.product.product.ProductAssocAndFrom" list="parentProductDetails">
+                    <econdition field-name="productIdTo" from="inventoryItem.productId"/>
+                    <econdition field-name="productAssocTypeId" value="PRODUCT_VARIANT"/>
+                    <date-filter/>
+                </entity-find>
+
+                <!-- Fetch the Facility Group Member details -->
+                <!-- There may be scenario when only a few facilities from all the facilities set-up are being used for external fulfillment.
+                     For this, separate Facility Group could be created for such facilities, eg. Facility Group for NetSuite Fulfillment.
+                     There could be further requirement to send inventory variances created for a particular facility group member to be sent to the external system.
+                     In the HC Inventory Item Variance Feed, all the facility group members of the assigned facility will be fetched.
+                     In the Jolt Transform, inventory variances can be further filtered out on the basis of Facility Group Id to send inventory variances of a particular Facility Group.
+                     TODO: For now we are using Facility Group Id for such checks, NOTE that Facility Group Type is not being used as the Facility Group Id will always be unique here, If needed in future, we can create view using FacilityGroup and FacilityGroupMember entities to include Facility Group type info as well. -->
+                <entity-find entity-name="org.apache.ofbiz.product.facility.FacilityGroupMember" list="facilityGroupMemberList">
+                    <date-filter/>
+                    <econdition field-name="facilityId" from="inventoryItem.facilityId"/>
+                </entity-find>
+
+                <!-- Prepare the inventoryItemVarianceMap -->
+                <set field="inventoryItemVarianceMap" from="inventoryItem.findAll { it.value != null }.sort() +
+                    [parentProductId:parentProductDetails?.first?.productId, parentProductName:parentProductDetails?.first?.productName,
+                    productIdentifications:goodIdentificationList, facilityGroupMembers:facilityGroupMemberList]"/>
+
+                <script>
+                    new ObjectMapper().setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                    .writerWithDefaultPrettyPrinter().writeValue(jGenerator, inventoryItemVarianceMap)
+                </script>
+            </iterate>
+
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.error("Error preparing Store Inventory Delta Feed file", e)
+                }
+                }
+            </script>
+
+            <!-- Based on the input of skipLastRunTimeUpdate, we can update the last Run time
+                   This will help in controlling the update of last run time if the job is run manually -->
+            <if condition="!skipLastRunTimeUpdate">
+                <!-- Set the current timestamp as the last run time for next feed run -->
+                <service-call name="update#moqui.service.job.ServiceJobParameter"
+                        in-map="[jobName:lastRunParam.jobName, parameterName:lastRunParam.parameterName,
+                        parameterValue:nowDate]"/>
+            </if>
+
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and send the file to sftp
+             using the send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[messageText:jsonFilePathRef, systemMessageTypeId:systemMessageTypeId,
+                    systemMessageRemoteId:systemMessageRemoteId, productStoreId:productStoreId]" out-map="invVarianceFeedSysMsgOut"/>
+
+            <return message="Created the Inventory Item Variance Feed at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and
+                remote ${systemMessageRemoteId} saved response in messages ${invVarianceFeedSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+
+    <!-- Wrapper service to prepare the filter parameters for generating the Inventory Cycle Count Variance Feed -->
+    <!-- The Inventory Cycle Count Import Variance parameters will be prepared as per below scenarios,
+         Case 1: If no parameter is passed, then by default the core service to generate the feed
+                 will be called, and it will generate feed as per the job's last run time.
+
+         Case 2: If the inventoryCountImportId and/or productId is passed without any date, then
+                 the service will generate feed for only the passed Ids. These Ids will be get
+                 passed to the core service to generate the feed.
+                 Since lastRunTime will be set for the job, it is required to perform below steps
+                 i. Set skipLastRunTimeUpdate to true
+                 ii. Copy and save the value for lastRunTime Service Job Param somewhere, and remove
+                 the value from the ServiceJobParameter entity so that it does not always check
+                 after that time, as the passed Ids may be of some previous date for which we
+                 want to manually generate the feed.
+
+         Case 3: If fromDate and thruDate is passed, then the service will generate the feed
+                 between that date range only.
+
+         Case 4: If daysBefore value is passed, then the service will generate the feed from the
+                 nth(daysBefore value) till previous day.
+                Eg. If the feed is being generated on '2023-06-07 20:20:00' and daysBefore is
+                passed as '1', then the feed will be generated for the imports of "2023-06-07".
+                NOTE Here, the fromDate and thruDate will be prepared as '2023-06-05 23:59:59'
+                and '2023-06-06 23:59:59' respectively.
+                This is because the fromDate is exclusive and thruDate is inclusive in the core
+                service.  -->
+    <service verb="get" noun="InventoryCycleCountVariance" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>
+            Service to prepare the required parameters for fetching the eligible records for
+            the Inventory Cycle Count Variance Feed. The HotWax JSON will be Variance wise.
+        </description>
+        <in-parameters>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Inventory Cycle Count Variance Feed.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send the Inventory Cycle Count Variance Feed.</description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of Product Store Ids to fetch Inventory Cycle Count Variance for products of a Product Store.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+            <parameter name="inventoryCountImportId">
+                <description>Parameter to fetch Inventory Cycle Count Variance for a specific inventory count import ID.</description>
+            </parameter>
+            <parameter name="productId">
+                <description>Parameter to fetch Inventory Cycle Count Variance for a specific product ID.</description>
+            </parameter>
+            <parameter name="statusId">
+                <description>Parameter to fetch Inventory Cycle Count Variance for a specific status ID.</description>
+            </parameter>
+            <parameter name="inventoryCountItemStatusId">
+                <description>Parameter to fetch Inventory Cycle Count Item Variance for a specific status ID.</description>
+            </parameter>
+            <parameter name="fromDate">
+                <description>Parameter to fetch records of Inventory Cycle Count Variance after a specific date.
+                    This parameter corresponds to the statusDate of InvCountImportStatus entity.</description>
+            </parameter>
+            <parameter name="thruDate">
+                <description>Parameter to fetch records of Inventory Cycle Count Variance before a specific date.
+                    This parameter corresponds to the statusDate of InvCountImportStatus entity.</description>
+            </parameter>
+            <parameter name="jobName">
+                <description>The name of the scheduled job to fetch the last run time for preparing the Inventory Delta Feed.</description>
+            </parameter>
+            <parameter name="skipLastRunTimeUpdate" type="Boolean" default="false">
+                <description>skip the LastRunTime update,mainly used while debugging</description>
+            </parameter>
+            <parameter name="daysBefore" type="Integer">
+                <description>
+                    Parameter to generate Inventory Cycle Count Variance Feed for n previous days from today.
+                </description>
+            </parameter>
+            <parameter name="customParametersMap" type="Map">
+                <description>This map defines custom conditions to fetch Inventory cycle count Variances, allowing flexibility to add new conditions dynamically.
+                    This parameter expects map in a specific format including suffixes like *_op for operators and *_ic for case-insensitivity.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <!-- set nowDate here to prepare the fromDate and thruDate if daysBefore is passed -->
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <if condition="daysBefore">
+                <!-- Subtract the (daysBefore + 1) from current max time to set it is as a fromDate, since
+                    the fromDate is exclusive in the core service -->
+                <set field="fromDate" from="ec.l10n.format(nowDate.toLocalDateTime().with(java.time.LocalTime.MAX).minus(daysBefore + 1, java.time.temporal.ChronoUnit.DAYS), 'yyyy-MM-dd HH:mm:ss.SSS')"/>
+                <!-- Here, subtracted '1' from the current max time to get the date-time of previous day to set the thruDate -->
+                <set field="thruDate" from="ec.l10n.format(nowDate.toLocalDateTime().with(java.time.LocalTime.MAX).minus(1, java.time.temporal.ChronoUnit.DAYS), 'yyyy-MM-dd HH:mm:ss.SSS')"/>
+            </if>
+
+            <service-call name="co.hotwax.ofbiz.InventoryServices.generate#InventoryCycleCountVarianceFeed"
+                    in-map="context"/>
+        </actions>
+    </service>
+
+    <!-- This Service will generate the feed for Inventory Cycle Count Import Variance -->
+    <!-- TODO:
+            1. Currently, no brand support in HC data model wrt InventoryCountImport, related ticket
+            is created https://git.hotwax.co/commerce/oms/-/issues/68, the related view and service
+            needs to be revisited once the HC ticket is handled.
+            2. The service will generate the feed using fromDate, thruDate and daysBefore parameters,.
+            Further it needs to be explored how can we include the logic to handle the schedule of this
+            feed using the job's lastRunTime to fetch records after the last run of the job.
+            Separate issue created to track this change,
+            https://git.hotwax.co/HC2/plugins/ofbiz-oms-usl/-/issues/367 -->
+
+    <!-- The Inventory Cycle Count Import Variance feed can be generated as per below scenarios,
+         Case 1: If no parameter is passed, then by default the service will generate feed as per
+                 the last run time of the job i.e it will fetch records created after the time
+                 the job was last run.
+
+         Case 2: If the inventoryCountImportId and/or productId is passed without any date, then
+                 the service will generate feed for only the passed Ids.
+                 Since lastRunTime will be set for the job, it is required to perform below steps
+                 i. Set skipLastRunTimeUpdate to true
+                 ii. Copy and save the value for lastRunTime Service Job Param somewhere, and remove
+                 the value from the ServiceJobParameter entity so that it does not always check
+                 after that time, as the passed Ids may be of some previous date for which we
+                 want to manually generate the feed.
+
+         Case 3: If fromDate and thruDate is passed, then the service will be generate the feed
+                 between that date range only. -->
+    <service verb="generate" noun="InventoryCycleCountVarianceFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>
+            Service to generate the Feed for Inventory Cycle Count Variance. The HotWax JSON will be Variance wise.
+        </description>
+        <in-parameters>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Inventory Cycle Count Variance Feed.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send the Inventory Cycle Count Variance Feed.</description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of Product Store Ids to fetch Inventory Cycle Count Variance for products of a Product Store.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+            <parameter name="inventoryCountImportId">
+                <description>Parameter to fetch Inventory Cycle Count Variance for a specific inventory count import ID.</description>
+            </parameter>
+            <parameter name="productId">
+                <description>Parameter to fetch Inventory Cycle Count Variance for a specific product ID.</description>
+            </parameter>
+            <parameter name="statusId">
+                <description>Parameter to fetch Inventory Cycle Count Variance for a specific status ID.</description>
+            </parameter>
+            <parameter name="inventoryCountItemStatusId">
+                <description>Parameter to fetch Inventory Cycle Count Item Variance for a specific status ID.</description>
+            </parameter>
+            <parameter name="fromDate">
+                <description>Parameter to fetch records of Inventory Cycle Count Variance after a specific date.
+                    This parameter corresponds to the statusDate of InvCountImportStatus entity.</description>
+            </parameter>
+            <parameter name="thruDate">
+                <description>Parameter to fetch records of Inventory Cycle Count Variance before a specific date.
+                    This parameter corresponds to the statusDate of InvCountImportStatus entity.</description>
+            </parameter>
+            <parameter name="jobName">
+                <description>The name of the scheduled job to fetch the last run time for preparing the Inventory Delta Feed.</description>
+            </parameter>
+            <parameter name="skipLastRunTimeUpdate" type="Boolean" default="false">
+                <description>skip the LastRunTime update,mainly used while debugging</description>
+            </parameter>
+            <parameter name="customParametersMap" type="Map">
+                <description>This map defines custom conditions to fetch Inventory cycle count Variances, allowing flexibility to add new conditions dynamically.
+                    This parameter expects map in a specific format including suffixes like *_op for operators and *_ic for case-insensitivity.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <!-- set nowDate here to prepare the lastRunTime of job for the next run -->
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <!-- We can use last run time to fetch the records updated after the last service job run -->
+            <!-- Check the parameter used for storing the last feed run time -->
+            <entity-find-one entity-name="moqui.service.job.ServiceJobParameter" value-field="lastRunParam">
+                <field-map field-name="jobName"/>
+                <field-map field-name="parameterName" value="lastRunTime"/>
+            </entity-find-one>
+
+            <!-- For the incoming inventoryCountImportId and productId, there is no check
+                 to use the fromDate as the feed will be generated for those Ids irrespective
+                 of the date.
+                 If they are not passed, then set sinceDate using the lastRunTime if it exists and
+                 fetch updates after that time. -->
+            <if condition="!inventoryCountImportId &amp;&amp; !productId">
+                <if condition="!fromDate">
+                    <set field="fromDate" from="lastRunParam?.parameterValue"/>
+                </if>
+            </if>
+
+            <log message="Generating Inventory Cycle Count Variance Feed file, from ${fromDate}, thru ${thruDate}, inventoryCountImportId ${inventoryCountImportId}, productId ${productId}."/>
+
+            <!-- Fetch the eligible inventory cycle count variance from the InventoryCountImportVariance view -->
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                invCycCntVariance_find = ec.entity.find("co.hotwax.warehouse.InventoryCountImportVariance")
+                .searchFormMap(customParametersMap, null, "", "", false)
+                if(inventoryCountImportId) invCycCntVariance_find.condition("inventoryCountImportId", inventoryCountImportId)
+                if(productId) invCycCntVariance_find.condition("productId", productId)
+                if(statusId) invCycCntVariance_find.condition("statusId", statusId)
+                <!-- NOTE:
+                1. The inventoryCountItemStatusId will be utilized to retrieve the Inventory Cycle Count Item status.
+                However, it's important to note that if only the Inventory Cycle Count Item status is set as completed, the feed will not pick up the records to be included in the feed.
+                2. This is because status transition with change in statusDateTime is not being handled as of now in OMS for individual Inventory Cycle Count Import Item records.
+                3. This service operates using the last job run date-time, and it checks against the InvCountImportStatus entity's status date field,
+                which maintains the overall cycle count import status rather than the inidividual cycle count items' status.
+                4. So if both status is set as INV_COUNT_COMPLETED, it will include the completed cycle counts and for each cycle count, include only the completed items. This is done to skip the other remaining items in cycle count which may be in Created or any other status. -->
+                if(inventoryCountItemStatusId) invCycCntVariance_find.condition("inventoryCountItemStatusId", inventoryCountItemStatusId)
+                <!-- NOTE:
+                       1. Here, for fromDate the operator used is "greater" because with lastRunTime,
+                       we would always want to fetch the records after that date to avoid sending
+                       duplicate records in the feeds.
+                       2. If the date is being passed from any wrapper service for this service, then
+                       it needs to be taken care of preparing the date value correctly to include all
+                       the required records to work with greater operator. -->
+                if(fromDate) invCycCntVariance_find.havingCondition(ec.entity.conditionFactory.makeCondition("statusDate", EntityCondition.ComparisonOperator.GREATER_THAN, fromDate))
+                if(thruDate) invCycCntVariance_find.havingCondition(ec.entity.conditionFactory.makeCondition("statusDate", EntityCondition.ComparisonOperator.LESS_THAN_EQUAL_TO, thruDate))
+
+                // Using try-with-resources to automatically close the EntityListIterator 'invCycCntVarianceItr'
+                try (invCycCntVarianceItr = invCycCntVariance_find.iterator()) {
+            </script>
+
+            <!-- If no records in invCycCntVarianceItr, then don't generate the file -->
+            <if condition="!invCycCntVarianceItr.hasNext()">
+                <return message="No eligible records for Inventory Cycle Count Variance Feed at ${nowDate}, not generating the HotWax Inventory Cycle Count Variance Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds or more than one productStoreIds are passed in the list,
+               then set the productStoreId to a default value as the feed being generated contains
+               the inventory cycle count variance of products for more than one product store id. -->
+            <!-- If productStoreIds list contains one value then set the productStoreId from the list. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Inventory Cycle Count Variance Feed JSON File Path -->
+            <!-- Using the productStoreId in the file name as well to help in debugging. -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+            [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS'),
+             productStoreId:productStoreId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Inventory Cycle Count Variance Feed file  -->
+            <script>
+                try {
+                    //json file
+                    File InvCycCntVarianceFeedFile = new File(jsonFilePath)
+                    if (!InvCycCntVarianceFeedFile.parentFile.exists()) InvCycCntVarianceFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, InvCycCntVarianceFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <iterate list="invCycCntVarianceItr" entry="invCycCntVariance">
+
+                <!-- Get all Good Identifications for Product -->
+                <entity-find entity-name="org.apache.ofbiz.product.product.GoodIdentification" list="goodIdentificationList">
+                    <econdition field-name="productId" from="invCycCntVariance.productId"/>
+                    <date-filter/>
+                </entity-find>
+
+                <!-- NOTE: There was a requirement as part of integration with NetSuite where in the client using NetSuite has some setting to use Parent Product name along with sku for the
+                identifier of the product in NetSuite, so that's why added the logic to get this data, otherwise it is not a very generic data
+                field to be prepared as part of this feed -->
+                
+                <!-- Get Parent Product details using Product Assoc view -->
+                <entity-find entity-name="org.apache.ofbiz.product.product.ProductAssocAndFrom" list="productAssocFrom">
+                    <econdition field-name="productIdTo" from="invCycCntVariance.productId"/>
+                    <econdition field-name="productAssocTypeId" value="PRODUCT_VARIANT"/>
+                    <date-filter/>
+                </entity-find>
+
+                <!-- Prepare the inventory cycle count map details -->
+                <set field="invCycleCountMap" from="invCycCntVariance.findAll { it.value != null }.sort() + [goodIdentifications:goodIdentificationList]"/>
+                <set field="invCycleCountMap.parentProductId" from="productAssocFrom?.first?.productId"/>
+                <set field="invCycleCountMap.parentProductName" from="productAssocFrom?.first?.productName"/>
+
+                <script>
+                    new ObjectMapper()
+                        .setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                        .writerWithDefaultPrettyPrinter().writeValue(jGenerator, invCycleCountMap)
+                </script>
+            </iterate>
+
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.error("Error preparing Inventory Cycle Count Variance Feed file", e)
+                }
+            }
+            </script>
+
+            <!-- Based on the input of skipLastRunTimeUpdate, we can update the last Run time
+                   This will help in controlling the update of last run time if the job is run manually -->
+            <if condition="!skipLastRunTimeUpdate">
+                <!-- Set the current timestamp as the last run time for next feed run -->
+                <service-call name="update#moqui.service.job.ServiceJobParameter"
+                        in-map="[jobName:lastRunParam.jobName, parameterName:lastRunParam.parameterName,
+                        parameterValue:nowDate]"/>
+            </if>
+
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and
+            send the file to sftp using send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[systemMessageTypeId:systemMessageTypeId,
+                    systemMessageRemoteId:systemMessageRemoteId, messageText:jsonFilePathRef,
+                    productStoreId:productStoreId]" out-map="invCycCntVarianceSysMsgOut"/>
+
+            <return message="Created the Inventory Cycle Count Variance Feed at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and
+                remote ${systemMessageRemoteId} saved response in messages ${invCycCntVarianceSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+
+    <service verb="check" noun="BopisInventory" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>
+            Service to return BOPIS inventory for the products at specific locations.
+            This requires productStoreId, inventoryGroupId (channel), facilityIds and either one of
+            productIds or internalNames.
+        </description>
+        <in-parameters>
+            <parameter name="productStoreId" required="true">
+                <description>The ID of the Product Store.</description>
+            </parameter>
+            <parameter name="inventoryGroupId" required="true">
+                <description>
+                    The ID of the facility group referring to the channel for which inventory should be
+                    fetched in HC OMS.
+                    For every channel, Facility Group Type will always be CHANNEL_FAC_GROUP,
+                    and particular channel ID i.e. facilityGroupId needs to be sent here.
+                </description>
+            </parameter>
+            <parameter name="productIds" type="List">
+                <description>The list of HC OMS product IDs. Eg. ["10001", "10002"]</description>
+            </parameter>
+            <parameter name="internalNames" type="List">
+                <description>
+                    The list of HC OMS internal product names. This field refers to Product.internalName.
+                    This is the well known ID of a product, usually UPC or SKU based on configuration.
+                    Eg. ["11924714-700", "11924714-703"]</description>
+            </parameter>
+            <parameter name="facilityIds" type="List" required="true">
+                <description>The list of HC OMS facility IDs. Eg. ["FAC_1", "FAC_2"]</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="resultList" type="List">
+                <parameter name="bopisInventory" type="Map">
+                    <parameter name="atp" type="BigDecimal">
+                        <description>The available to promise inventory of the product.</description>
+                    </parameter>
+                    <parameter name="safetyStock" type="BigDecimal">
+                        <description>The quantity of the product referring to the minimum stock for the product at the facility.</description>
+                    </parameter>
+                    <parameter name="computedAtp" type="BigDecimal">
+                        <description>The computed available to promise inventory of the product after deducting facility's minimum/safety stock.</description>
+                    </parameter>
+                    <parameter name="decisionReason">
+                        <description>
+                            This refers to the reason for which atp check failed and hence no available inventory for BOPIS.
+                            Eg. ProductStore, PickUpFacility, InventoryGroup, AllowPickupInventoryGroup, AllowPickupFacility
+                        </description>
+                    </parameter>
+                    <parameter name="decisionReasonDesc">
+                        <description>This refers to the description of the reason for which atp check failed and hence no available inventory for BOPIS.</description>
+                    </parameter>
+                    <parameter name="productId">
+                        <description>The HC OMS Product ID.</description>
+                    </parameter>
+                    <parameter name="internalName">
+                        <description>The HC OMS Product Internal Name. This is the
+                            well known ID of a product, usually UPC or SKU based on configuration.</description>
+                    </parameter>
+                    <parameter name="facilityId">
+                        <description>The HC OMS Facility ID.</description>
+                    </parameter>
+                </parameter>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <set field="resultList" from="[]"/>
+
+            <if condition="!productIds &amp;&amp; !internalNames">
+                <return error="true" message="One of productIds or internalNames is required for the API."/>
+            </if>
+
+            <!-- The core service takes in HC Product Id, so if internalNames is being sent, then
+                 fetch the HC Product IDs to fetch the BOPIS Inventory.-->
+            <if condition="!productIds &amp;&amp; internalNames">
+                <entity-find entity-name="org.apache.ofbiz.product.product.Product" list="productList">
+                    <econdition field-name="internalName" from="internalNames" operator="in"/>
+                    <select-field field-name="productId,internalName"/>
+                </entity-find>
+                <set field="productIds" from="productList*.productId"/>
+            </if>
+
+            <!-- Fetch the BOPIS Inventory using the core service -->
+            <iterate list="productIds" entry="productId">
+                <iterate list="facilityIds" entry="facilityId">
+                    <!-- Needed to set this as empty map, else duplicate data being returned when
+                        multiple products are being sent in the API. NOTE revisit once before removing this. -->
+                    <set field="bopisInvOut" from="[:]"/>
+                    <service-call name="co.hotwax.ofbiz.InventoryServices.get#BopisInventory"
+                            in-map="[productStoreId:productStoreId, inventoryGroupId:inventoryGroupId,
+                            productId:productId, facilityId:facilityId]" out-map="bopisInvOut"/>
+
+                    <!-- Prepare internal name for response -->
+                    <set field="internalName" from="productList.find{ it.productId.equals(productId) }?.internalName"/>
+
+                    <script>resultList.add(bopisInvOut + [internalName:internalName])</script>
+                </iterate>
+            </iterate>
+        </actions>
+    </service>
+
+    <service verb="get" noun="BopisInventory" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>
+            Core Service to return BOPIS inventory for the product at a specific location.
+            This requires productStoreId, inventoryGroupId (channel), productId and facilityId.
+        </description>
+        <in-parameters>
+            <parameter name="productStoreId" required="true">
+                <description>The ID of the Product Store.</description>
+            </parameter>
+            <parameter name="inventoryGroupId" required="true">
+                <description>
+                    The ID of the facility group referring to the channel for which inventory should be
+                    fetched in HC OMS.
+                    For every channel, Facility Group Type will always be CHANNEL_FAC_GROUP,
+                    and particular channel ID i.e. facilityGroupId needs to be sent here.
+                </description>
+            </parameter>
+            <parameter name="productId" required="true">
+                <description>The HC OMS Product ID.</description>
+            </parameter>
+            <parameter name="facilityId" required="true">
+                <description>The HC OMS Facility ID.</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="atp" type="BigDecimal">
+                <description>The available to promise inventory of the product.</description>
+            </parameter>
+            <parameter name="safetyStock" type="BigDecimal">
+                <description>The quantity of the product referring to the minimum stock for the product at the facility.</description>
+            </parameter>
+            <parameter name="computedAtp" type="BigDecimal">
+                <description>The computed available to promise inventory of the product after deducting facility's minimum/safety stock.</description>
+            </parameter>
+            <parameter name="decisionReason">
+                <description>
+                    This refers to the reason for which atp check failed and hence no available inventory for BOPIS.
+                    Eg. ProductStore, PickUpFacility, InventoryGroup, AllowPickupInventoryGroup, AllowPickupFacility
+                </description>
+            </parameter>
+            <parameter name="decisionReasonDesc">
+                <description>This refers to the description of the reason for which atp check failed and hence no available inventory for BOPIS.</description>
+            </parameter>
+            <parameter name="productId">
+                <description>The HC OMS Product ID.</description>
+            </parameter>
+            <parameter name="facilityId">
+                <description>The HC OMS Facility ID.</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <!-- Set default as 0.0 if any check failed to return BOPIS inventory or no ProductFacility record -->
+            <set field="atp" from="0.0"/>
+            <set field="computedAtp" from="0.0"/>
+            <set field="safetyStock" from="0.0"/>
+
+            <!-- Check 1: Is Facility associated with Product Store? -->
+            <entity-find-count entity-name="org.apache.ofbiz.product.store.ProductStoreFacility" count-field="psfCount">
+                <econdition field-name="productStoreId"/>
+                <econdition field-name="facilityId"/>
+                <date-filter/>
+            </entity-find-count>
+            <if condition="psfCount == 0">
+                <set field="decisionReason" value="ProductStore"/>
+                <set field="decisionReasonDesc" value="The facility ${facilityId} is not associated with Product Store ${productStoreId}."/>
+                <return/>
+            </if>
+
+            <!-- Check 2: Is the Facility part of PICKUP Facility Group Member? -->
+            <entity-find-count entity-name="co.hotwax.facility.FacilityGroupAndMember" count-field="pickupFacGrpMemCount">
+                <econdition field-name="facilityId"/>
+                <econdition field-name="facilityGroupTypeId" value="PICKUP"/>
+                <date-filter/>
+            </entity-find-count>
+            <if condition="pickupFacGrpMemCount == 0">
+                <set field="decisionReason" value="PickUpFacility"/>
+                <set field="decisionReasonDesc" value="The facility ${facilityId} does not have PickUp enabled. Add it to the PickUp facility group to enable pickup."/>
+                <return/>
+            </if>
+
+            <!-- Check 3: Is the facility part of Channel/Inventory Group Facility Group Member? -->
+            <entity-find-count entity-name="co.hotwax.facility.FacilityGroupAndMember" count-field="invGroupFacGrpMemCount">
+                <econdition field-name="facilityId"/>
+                <econdition field-name="facilityGroupTypeId" value="CHANNEL_FAC_GROUP"/>
+                <econdition field-name="facilityGroupId" from="inventoryGroupId"/>
+                <date-filter/>
+            </entity-find-count>
+            <if condition="invGroupFacGrpMemCount == 0">
+                <set field="decisionReason" value="InventoryGroup"/>
+                <set field="decisionReasonDesc" value="The facility ${facilityId} where the product ${productId} is located does not cater its inventory to that channel."/>
+                <return/>
+            </if>
+
+            <!-- Check 4: Is PickUp allowed globally for the Channel/Inventory Group? -->
+
+            <!-- Fetch Configuration type Facilities from ProductFacilityAndGroup View for the channel. -->
+            <!-- NOTE: For multichannel inventory, each channel means new Facility Group and each Facility Group can
+                 have its Configuration type facility to manage separate thresholds.  -->
+            <!-- NOTE
+                    1. If no CONFIGURATION type facility, then skip and move ahead.
+                    2. If CONFIGURATION type facility exists, check for allowPickup field. -->
+            <entity-find entity-name="co.hotwax.warehouse.ProductFacilityAndGroup" list="invGroupConfigFacilityList">
+                <econdition field-name="productId"/>
+                <econdition field-name="facilityGroupId" from="inventoryGroupId"/>
+                <econdition field-name="facilityTypeId" value="CONFIGURATION"/>
+                <date-filter/>
+            </entity-find>
+            <if condition="!invGroupConfigFacilityList.isEmpty()">
+                <set field="invGroupConfigFacilityFirst" from="invGroupConfigFacilityList.first"/>
+                <set field="invGroupAllowPickup" from="invGroupConfigFacilityFirst.allowPickup"/>
+                <if condition="'N'.equals(invGroupAllowPickup)">
+                    <set field="decisionReason" value="AllowPickupInventoryGroup"/>
+                    <set field="decisionReasonDesc" value="Pickup is not allowed globally for the Inventory group ${inventoryGroupId}."/>
+                    <return/>
+                </if>
+            </if>
+
+            <!-- Check 5: Is PickUp allowed for the product at the facility? -->
+            <entity-find entity-name="co.hotwax.warehouse.ProductFacilityAndGroup" list="productFacilityList" distinct="true">
+                <econdition field-name="productId"/>
+                <econdition field-name="facilityId"/>
+            </entity-find>
+            <set field="productFacilityFirst" from="productFacilityList?.first"/>
+
+            <if condition="productFacilityFirst">
+                <set field="productFacilityAllowPickup" from="productFacilityFirst.allowPickup"/>
+                <if condition="'N'.equals(productFacilityAllowPickup)">
+                    <set field="decisionReason" value="AllowPickupFacility"/>
+                    <set field="decisionReasonDesc" value="The facility ${facilityId} where the product inventory is located is disabled for catering to BOPIS orders."/>
+                    <return/>
+                </if>
+                <set field="atp" from="productFacilityFirst.lastInventoryCount"/>
+                <set field="computedAtp" from="productFacilityFirst.computedLastInventoryCount"/>
+                <set field="safetyStock" from="productFacilityFirst.minimumStock ?: 0.0"/>
+            </if>
+        </actions>
+    </service>
+
+    <service verb="check" noun="ShippingInventory" authenticate="anonymous-all">
+        <description>
+            Service to check product inventory availability at a facility for shipping.
+            Requires parameters: productStoreId, either productIds or internalNames, and optionally inventoryGroupId (channel) or facilityIds.
+        </description>
+        <in-parameters>
+            <parameter name="productStoreId" type="String" required="true">
+                <description>The ID of the Product Store.</description>
+            </parameter>
+            <parameter name="inventoryGroupId" type="String">
+                <description>
+                    The ID of the inventory group referring to the channel for which inventory should be
+                    fetched in HC OMS.
+                    For every channel, Facility Group Type will always be CHANNEL_FAC_GROUP,
+                    and particular channel ID i.e. facilityGroupId needs to be sent here.
+                </description>
+            </parameter>
+            <parameter name="productIds" type="Set">
+                <description>The IDs of the products for which inventory should be fetched.</description>
+            </parameter>
+            <parameter name="internalNames" type="Set">
+                <description>The internal names of the products for which inventory should be fetched. NOTE: This parameter is mutually exclusive with productIds. i.e. either productIds or internalNames is required.</description>
+            </parameter>
+            <parameter name="facilityIds" type="Set">
+                <description>The IDs of the facilities for which inventory should be fetched.</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="resultList" type="List">
+                <description>List of the products and their inventory</description>
+                <parameter name="shippingInventory" type="Map">
+                    <parameter name="productId" type="String">
+                        <description>The ID of the product.</description>
+                    </parameter>
+                    <parameter name="internalName" type="String">
+                        <description>The internal name of the product, Output only if the internalNames will be sent instead of productIds in the request.</description>
+                    </parameter>
+                    <parameter name="inventoryGroupId" type="String">
+                        <description>The ID of the inventory group.</description>
+                    </parameter>
+                    <parameter name="totalAtp" type="BigDecimal">
+                        <description>Total available to promise quantity of the product.</description>
+                    </parameter>
+                    <parameter name="totalComputedAtp" type="BigDecimal">
+                        <description>Total computed available to promise quantity of the product.</description>
+                    </parameter>
+                    <parameter name="threshold" type="BigDecimal">
+                        <description>The threshold value of the product at given channel.</description>
+                    </parameter>
+                    <parameter name="facilities" type="List">
+                        <parameter name="facilityInventory" type="Map">
+                            <parameter name="facilityId" type="String"/>
+                            <parameter name="atp" type="BigDecimal"/>
+                            <parameter name="computedAtp" type="BigDecimal"/>
+                            <parameter name="safetyStock" type="BigDecimal"/>
+                            <parameter name="facilityOrderCapacity" type="BigDecimal"/>
+                            <parameter name="decisionReason" type="String"/>
+                            <parameter name="decisionReasonDesc" type="String"/>
+                        </parameter>
+                    </parameter>
+                    <parameter name="decisionReason" type="String">
+                        <description>This refers to the reason for which atp check failed and hence no available shipping inventory for product.</description>
+                    </parameter>
+                    <parameter name="decisionReasonDesc" type="String">
+                        <description>This refers to the description of the reason for which atp check failed and hence no available shipping inventory for product.</description>
+                    </parameter>
+                </parameter>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <set field="resultList" from="[]"/>
+
+            <if condition="!productIds &amp;&amp; !internalNames">
+                <return error="true" message="One of productIds or internalNames is required for the API."/>
+            </if>
+
+            <!-- Preparing the list of products, if internalNames are provided -->
+            <if condition="!productIds &amp;&amp; internalNames">
+                <entity-find entity-name="org.apache.ofbiz.product.product.Product" list="productList">
+                    <econdition field-name="internalName" from="internalNames" operator="in"/>
+                    <select-field field-name="productId,internalName"/>
+                </entity-find>
+                <set field="productIds" from="productList*.productId"/>
+            </if>
+
+            <!-- Preparing the list of facilities, Based on the input parameters
+                 1. if inventoryGroupId is given then get the list of facilities in the group
+                 2. if both inventoryGroupId and facilityIds are not given then get the list of all physical facilities
+            -->
+            <if condition="!facilityIds">
+                <if condition="!inventoryGroupId">
+                    <entity-find entity-name="co.hotwax.facility.FacilityAndType" list="facilityList">
+                        <econdition field-name="parentTypeId" operator="not-equals" value="VIRTUAL_FACILITY"/>
+                        <econdition field-name="parentTypeId" operator="is-not-null"/>
+                        <select-field field-name="facilityId"/>
+                    </entity-find>
+                    <else>
+                        <entity-find entity-name="org.apache.ofbiz.product.facility.FacilityGroupMember" list="facilityList" distinct="true">
+                            <econdition field-name="facilityGroupId" from="inventoryGroupId"/>
+                            <date-filter/>
+                        </entity-find>
+                    </else>
+                </if>
+                <set field="facilityIds" from="facilityList*.facilityId" type="Set"/>
+            </if>
+
+            <!-- Fetch the Shipping Inventory using Core service for each product at each location -->
+            <iterate list="productIds" entry="productId">
+                <set field="facilities" from="[]"/>
+                <if condition="inventoryGroupId">
+                    <entity-find entity-name="co.hotwax.warehouse.ProductFacilityAndGroup" list="configProductFacilityList">
+                        <econdition field-name="facilityTypeId" value="CONFIGURATION"/>
+                        <econdition field-name="productId" from="productId"/>
+                        <econdition field-name="facilityGroupId" from="inventoryGroupId"/>
+                        <date-filter/>
+                    </entity-find>
+
+                    <!-- TODO: Add support for catering to multiple configuration facilities in the same group
+                         For now we simply picked the first configuration facility -->
+                    <set field="configProductFacility" from="configProductFacilityList?.first"/>
+
+                    <!-- Check If the inventory group is globally allowed to be brokering for the product -->
+                    <if condition="configProductFacility &amp;&amp; 'N'.equals(configProductFacility?.allowBrokering)">
+                        <set field="decisionReason" value="AllowBrokeringInventoryGroup"/>
+                        <set field="decisionReasonDesc" value="Brokering of the product ${productId} for the inventory group ${inventoryGroupId} is not allowed globally."/>
+                        <script>resultList.add([productId:productId, inventoryGroupId:inventoryGroupId, decisionReason:decisionReason, decisionReasonDesc:decisionReasonDesc])</script>
+                        <continue/>
+                    </if>
+
+                    <set field="threshold" from="configProductFacility?.minimumStock"/>
+                </if>
+
+                <iterate list="facilityIds" entry="facilityId">
+                    <!-- Excluding the configuration facility from the list if inventoryGroupId is provided -->
+                    <if condition="facilityId == configProductFacility?.facilityId">
+                        <continue/>
+                    </if>
+                    <set field="facility" from="[:]"/>
+                    <service-call name="co.hotwax.ofbiz.InventoryServices.get#ShippingInventory"
+                        in-map="[productStoreId:productStoreId, inventoryGroupId:inventoryGroupId, productId:productId, facilityId:facilityId]"
+                        out-map="facility"
+                    />
+                    <script>facilities.add(facility)</script>
+                </iterate>
+                <set field="internalName" from="productList.find{ it.productId.equals(productId) }?.internalName"/>
+                <script>
+                    totalAtp = facilities.sum {it.atp}
+                    totalComputedAtp = facilities.sum {it.computedAtp}
+                    totalSafetyStock = facilities.sum {it.safetyStock}
+                </script>
+                <script>
+                    resultList.add([
+                        productId:productId,
+                        internalName: internalName,
+                        inventoryGroupId:inventoryGroupId,
+                        threshold:threshold,
+                        totalAtp:totalAtp,
+                        totalComputedAtp:totalComputedAtp,
+                        totalSafetyStock:totalSafetyStock,
+                        facilities:facilities
+                    ])
+                </script>
+            </iterate>
+        </actions>
+    </service>
+
+    <service verb="get" noun="ShippingInventory" authenticate="anonymous-all">
+        <description>This is the Core service to get the shipping inventory of a product at a facility.</description>
+        <in-parameters>
+            <parameter name="productStoreId" type="String" required="true">
+                <description>The ID of the product store.</description>
+            </parameter>
+            <parameter name="inventoryGroupId" type="String">
+                <description>The ID of the inventory group. It is defaulted to null.</description>
+            </parameter>
+            <parameter name="productId" type="String" required="true">
+                <description>The ID of the product.</description>
+            </parameter>
+            <parameter name="facilityId" type="String" required="true">
+                <description>The ID of the facility.</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="facilityId" type="String">
+                <description>The ID of the facility.</description>
+            </parameter>
+            <parameter name="atp" type="BigDecimal">
+                <description>The ATP of product at facility.</description>
+            </parameter>
+            <parameter name="computedAtp" type="BigDecimal">
+                <description>The computed ATP of product at facility.</description>
+            </parameter>
+            <parameter name="safetyStock" type="BigDecimal">
+                <description>The safety stock of product at facility.</description>
+            </parameter>
+            <parameter name="facilityOrderCapacity" type="BigDecimal">
+                <description>Daily order capacity of the facility.</description>
+            </parameter>
+            <parameter name="facilityRemainingOrderCapacity" type="BigDecimal">
+                <description>Remaining order capacity of the facility.</description>
+            </parameter>
+            <parameter name="decisionReason" type="String">
+                <description>
+                    The reason of the decision for which the shipping inventory check for the product at facility is failed.
+                    E.g. ProductStore, InventoryGroup, AllowBrokeringInventoryGroup, AllowBrokeringFacility, ProductFacility etc.
+                </description>
+            </parameter>
+            <parameter name="decisionReasonDesc" type="String">
+                <description>The description of the decision for which the shipping inventory check for the product at facility is failed.</description>
+            </parameter>
+        </out-parameters>
+
+        <actions>
+            <set field="atp" from="0.0"/>
+            <set field="computedAtp" from="0.0"/>
+            <set field="safetyStock" from="0.0"/>
+
+            <!-- Check if the facility is associated with the product store -->
+            <entity-find-count entity-name="org.apache.ofbiz.product.store.ProductStoreFacility" count-field="psfCount">
+                <econdition field-name="productStoreId" from="productStoreId"/>
+                <econdition field-name="facilityId" from="facilityId"/>
+                <date-filter/>
+            </entity-find-count>
+            <if condition="psfCount == 0">
+                <set field="decisionReason" value="ProductStore"/>
+                <set field="decisionReasonDesc" value="The facility ${facilityId} is not associated with Product Store ${productStoreId}."/>
+                <return/>
+            </if>
+
+            <!-- Check if the facility is associated with the inventory group -->
+            <if condition="inventoryGroupId">
+                <entity-find-count entity-name="co.hotwax.facility.FacilityGroupAndMember" count-field="invGroupFacGrpMemCount" cache="true" distinct="true">
+                    <econdition field-name="facilityId" from="facilityId"/>
+                    <econdition field-name="facilityGroupTypeId" value="CHANNEL_FAC_GROUP"/>
+                    <econdition field-name="facilityGroupId" from="inventoryGroupId"/>
+                    <date-filter/>
+                </entity-find-count>
+
+                <if condition="invGroupFacGrpMemCount == 0">
+                    <set field="decisionReason" value="InventoryGroup"/>
+                    <set field="decisionReasonDesc" value="The facility ${facilityId} where the product ${productId} is located does not cater its inventory to that channel."/>
+                    <return/>
+                </if>
+            </if>
+
+            <entity-find-one entity-name="org.apache.ofbiz.product.facility.ProductFacility" value-field="productFacilityFirst"/>
+            <if condition="productFacilityFirst">
+                <!-- Check if the facility is enabled for brokering of the orders -->
+                <set field="productFacilityAllowBrokering" from="productFacilityFirst.allowBrokering"/>
+                <if condition="'N'.equals(productFacilityAllowBrokering)">
+                    <set field="decisionReason" value="AllowBrokeringFacility"/>
+                    <set field="decisionReasonDesc" value="The facility ${facilityId} where the product ${productId} inventory is located is disabled for cater to shipping orders."/>
+                    <return/>
+                </if>
+
+                <set field="entryDate" from="ec.user.nowCalendar.format('yyyy-MM-dd')"/>
+                <entity-find-one entity-name="org.apache.ofbiz.product.facility.Facility" value-field="facilityLimit"/>
+                <entity-find-one entity-name="co.hotwax.facility.FacilityOrderCount" value-field="facilityOrderCount"/>
+
+                <set field="facilityOrderCapacity" from="facilityLimit?.maximumOrderLimit"/>
+                <script>
+                    facilityRemainingOrderCapacity = facilityOrderCapacity != null ? facilityOrderCapacity - (facilityOrderCount?.lastOrderCount?:0):null
+                </script>
+
+                <set field="atp" from="productFacilityFirst.lastInventoryCount?:0.0"/>
+                <set field="safetyStock" from="productFacilityFirst.minimumStock?:0.0"/>
+                <set field="computedAtp" from="productFacilityFirst.computedLastInventoryCount?:0.0"/>
+
+                <else>
+                    <set field="decisionReason" value="ProductFacility"/>
+                    <set field="decisionReasonDesc" value="The inventory for product ${productId} at facility ${facilityId} is not available"/>
+                </else>
+            </if>
+        </actions>
+    </service>
+</services>

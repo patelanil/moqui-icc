@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.6.5">
+
+    <!-- Template service job to generate Fulfilled Order Items Feed for Partial fulfillment-->
+    <moqui.service.job.ServiceJob jobName="generate_TransferOrderFulfilledItemsFeed"
+            description="Template Service Job to generate the Transfer Orders Fulfilled Items Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.OrderServices.generate#TransferOrderFulfilledItemsFeed"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="orderStatusId"/>
+        <parameters parameterName="orderTypeId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="parentFacilityTypeId"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="productTypeIds"/>
+        <parameters parameterName="isPhysical"/>
+        <parameters parameterName="includeSalesChannel"/>
+        <parameters parameterName="excludeSalesChannel"/>
+        <parameters parameterName="customParametersMap"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+    </moqui.service.job.ServiceJob>
+
+</entity-facade-xml>

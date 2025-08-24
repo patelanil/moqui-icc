@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v2.0.2">
+
+    <moqui.service.job.ServiceJob jobName="generate_BrokeredOrderItemsFeed">
+        <parameters parameterName="facilityGroupIds"/>
+    </moqui.service.job.ServiceJob>
+
+</entity-facade-xml>

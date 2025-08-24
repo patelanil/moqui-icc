@@ -1,0 +1,121 @@
+workflow:
+ rules:
+   - if: '$CI_PIPELINE_SOURCE == "web"'
+     when: always
+   - when: never
+   
+stages:
+  - maarg_docker_file_update
+  - build_docker_image
+  - maarg_docker_config_release
+
+variables:
+  DOCKER_HOST: $DOCKER_HOST
+  GIT_USERNAME: $GIT_USERNAME
+  GIT_PASSWORD: $GIT_PASSWORD
+  REPOSITORY_URL: $REPOSITORY_URL
+  DOCKER_BRANCH: 
+    description: "Source branch name"
+    value: main 
+  MAARG_DOCKER_TAG: 
+    description: "New release tag (v.*.*)"
+
+maarg_docker_file_update_job:
+  stage: maarg_docker_file_update
+  image: bitnami/git:2.37.1
+  allow_failure: false
+
+  rules:
+  - if: '$MAARG_DOCKER_TAG =~ /^v.*/ && $CI_PIPELINE_SOURCE == "web"'
+
+  script:
+    - CLEANED_TAG=$(echo $MAARG_DOCKER_TAG | sed 's/^v//')
+    - apt-get update
+    - apt-get install -y curl
+
+    - git clone --single-branch -b "$DOCKER_BRANCH" https://root:$PROJECT_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_PATH.git maarg-docker-config
+    - cd maarg-docker-config
+    - git config user.email "ci-bot@hotwax.co"
+
+    - sed -i "s/RUN git clone --depth 1 -b \"[^\"]*\" https:\/\/git\.hotwax\.co\/HC2\/maarg-docker-config\.git/RUN git clone --depth 1 -b \"$MAARG_DOCKER_TAG\" https:\/\/git\.hotwax\.co\/HC2\/maarg-docker-config\.git/" docker/prod/Dockerfile
+    - |
+      if [ -f docker/uat/Dockerfile ]; then
+        sed -i "s/RUN git clone --depth 1 -b \"[^\"]*\" https:\/\/git\.hotwax\.co\/HC2\/maarg-docker-config\.git/RUN git clone --depth 1 -b \"$MAARG_DOCKER_TAG\" https:\/\/git\.hotwax\.co\/HC2\/maarg-docker-config\.git/" docker/uat/Dockerfile
+      fi
+
+    - git add .
+    - git commit -m "Updated docker file [ci skip]"
+
+    # Clean tag
+    - git tag -d ${MAARG_DOCKER_TAG} 2>/dev/null || echo "Tag ${MAARG_DOCKER_TAG} not found, skipping deletion."
+
+    - git tag -a -m "Updated Docker file with tag  [ci skip]" $MAARG_DOCKER_TAG
+    - git push -o ci.skip https://root:$PROJECT_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_PATH.git $MAARG_DOCKER_TAG
+
+
+build_docker_image_job:
+  when: on_success
+  image:
+    name: amazon/aws-cli:2.27.50
+    entrypoint: [""]
+
+  services:
+    - docker:18.09-dind
+
+  before_script:
+    - amazon-linux-extras install docker
+    - aws --version
+    - docker --version
+
+  stage: build_docker_image
+  
+  allow_failure: false
+
+  rules:
+    - if: '$MAARG_DOCKER_TAG =~ /^v.*/ && $CI_PIPELINE_SOURCE == "web"'
+  script:
+    - echo $MAARG_DOCKER_TAG
+    - echo $CI_PROJECT_ID + $MAARG_DOCKER_TAG + $CI_API_V4_URL
+    - CLEANED_TAG=$(echo $MAARG_DOCKER_TAG | sed 's/^v//')
+  
+    #Install jq to fetch change log, installing epel to as sudo is not present in aws/linux
+    - amazon-linux-extras install epel
+    - yum install -y jq git
+
+    - git clone --single-branch -b "$MAARG_DOCKER_TAG" https://root:$PROJECT_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_PATH.git maarg-docker-config
+    - cd maarg-docker-config
+    - git config user.email "ci-bot@hotwax.co" 
+    # Login to ECR
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URL
+
+    - echo "Building Docker image... $DOCKER_IMAGE_NAME"
+    - docker build --load --force-rm=true --no-cache=true --build-arg GIT_USERNAME=$GIT_USERNAME --build-arg GIT_PASSWORD=$GIT_PASSWORD -t $REPOSITORY_URL:$MAARG_DOCKER_TAG -f docker/prod/Dockerfile .
+
+    
+    - echo "Pushing Docker Image . . ."
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URL
+    - docker push $REPOSITORY_URL:$MAARG_DOCKER_TAG
+    - docker rmi $REPOSITORY_URL:$MAARG_DOCKER_TAG
+
+maarg_docker_config_release_job:
+  when: on_success
+  stage: maarg_docker_config_release
+
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+
+  needs:
+    - job: build_docker_image_job
+      artifacts: true
+
+  rules:
+    - if: '$MAARG_DOCKER_TAG =~ /^v.*/ && $CI_PIPELINE_SOURCE == "web"'
+
+  script:
+    - echo "running release_job"
+    - CLEANED_TAG=$(echo $MAARG_DOCKER_TAG | sed 's/^v//')
+    - echo "Cleaned tag $CLEANED_TAG"
+    - RELEASE_DATE=$(date +%F)
+    - release-cli create --name "${CLEANED_TAG} (${RELEASE_DATE})" --description ${RELEASE_DATE} --tag-name "${MAARG_DOCKER_TAG}" 
+
+  retry: 2
+

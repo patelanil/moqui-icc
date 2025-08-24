@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.2.3">
+
+    <!-- Template Service Job to generate the Appeasements Financial Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_AppeasementsFinancialFeed">
+        <parameters parameterName="sinceReturnDate"/>
+        <parameters parameterName="sinceEntryDate"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate the Returns Financial Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsFinancialFeed">
+        <parameters parameterName="sinceReturnDate"/>
+        <parameters parameterName="sinceReturnCompletedDate"/>
+        <parameters parameterName="sinceEntryDate"/>
+    </moqui.service.job.ServiceJob>
+
+</entity-facade-xml>

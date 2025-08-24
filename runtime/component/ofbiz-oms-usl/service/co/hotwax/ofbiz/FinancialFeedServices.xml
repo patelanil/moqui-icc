@@ -1,0 +1,1189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="generate" noun="AppeasementsFinancialFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <in-parameters>
+            <parameter name="orderId">
+                <description>Parameter to fetch Appeasement details for a specific orderId.</description>
+            </parameter>
+            <parameter name="returnId">
+                <description>Parameter to fetch Appeasement details for a specific returnId.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send Appeasements Financial Feed.</description>
+            </parameter>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Appeasements Financial Feed.</description>
+            </parameter>
+            <parameter name="sinceReturnDate">
+                <description>
+                    Parameter to fetch Appeasements after a specific Return Date.
+                    This date corresponds to the ReturnHeader.returnDate in HC.
+                </description>
+            </parameter>
+            <parameter name="sinceEntryDate">
+                <description>
+                    Parameter to fetch Appeasements created after a specific Date in HC.
+                    This date corresponds to the ReturnHeader.entryDate in HC.
+                </description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of Product Store Ids for generating Appeasements Financial Feed.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+            <parameter name="facilityGroupIds" type="List">
+                <description>
+                    List of facility group ids for generating Brokered Orders Items Feed.
+                    For passing the facility group ids as list, add values like - M3_FAC, BJ_FAC_GRP and for single value use - M3_FAC.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <log message="Generating Appeasements Financial Feed of HotWax for Order ${orderId} at time ${nowDate}"/>
+
+            <!-- Fetch orders from the FinancialAppeasementsSyncQueue for identifying the orders ready for preparing
+                the Appeasements Financial Feed -->
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                //Performing entity find operation using groovy script
+                appeasementSyncQueue_find = ec.entity.find("co.hotwax.financial.FinancialAppeasementSyncQueue")
+                if(orderId) appeasementSyncQueue_find.condition("orderId", orderId)
+                if(returnId) appeasementSyncQueue_find.condition("returnId", returnId)
+                if(productStoreIds) appeasementSyncQueue_find.condition("productStoreId", EntityCondition.ComparisonOperator.IN, productStoreIds)
+                 <!-- Condition on date is added to handle scenario where we want to fetch Appeasements after a particular return date, this can be needed where we want to ignore some historical Appeasements which is not required to sync. -->
+                if(sinceReturnDate) appeasementSyncQueue_find.condition("returnDate", EntityCondition.ComparisonOperator.GREATER_THAN, sinceReturnDate)
+                <!-- Condition on date is added to handle scenario where we want to fetch Appeasements after a particular date when they are created in HC. -->
+                if(sinceEntryDate) appeasementSyncQueue_find.condition("entryDate", EntityCondition.ComparisonOperator.GREATER_THAN, sinceEntryDate)
+
+                // Using try-with-resources to automatically close the EntityListIterator 'appeasementSyncQueueItr'
+                try (appeasementSyncQueueItr = appeasementSyncQueue_find.iterator()) {
+            </script>
+
+            <!-- If no appeasements in FinancialAppeasementSyncQueue, then don't generate the file -->
+            <if condition="!appeasementSyncQueueItr.hasNext()">
+                <return message="No eligible appeasements to prepare Appeasements Financial Feed at ${nowDate}, not generating the HotWax Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds or more than one productStoreIds are passed in the list,
+               then set the productStoreId to a default value as the feed being generated contains the appeasements for more than one product store ids. -->
+            <!-- If productStoreIds list contains one value then set the productStoreId from the list. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+            
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Appeasements Financial Feed JSON File Path -->
+            <!-- Using the productStoreId in the file name to help in debugging. -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+                [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS'),
+                productStoreId:productStoreId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Financial Feed files  -->
+            <script>
+                try {
+                    //json file
+                    File appeasementsFeedFile = new File(jsonFilePath)
+                    if (!appeasementsFeedFile.parentFile.exists()) appeasementsFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, appeasementsFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <iterate list="appeasementSyncQueueItr" entry="appeasement">
+                <log message="Preparing Appeasement ${appeasement.returnId} for the Appeasements Financial Feed."/>
+                <!-- Get other details from AppeasementsView and prepare the map for Appeasements Feed -->
+                <entity-find entity-name="co.hotwax.financial.AppeasementView" list="appeasementsList">
+                    <econdition field-name="returnId" from="appeasement.returnId"/>
+                    <econdition field-name="returnAdjustmentTypeId" value="APPEASEMENT"/>
+                </entity-find>
+
+                <!-- Get first order from AppeasementView -->
+                <set field="appeasementFirst" from="appeasementsList?.first"/>
+
+                <!-- Preparing the total amount -->
+                <set field="appeasementTotalAmount" from="0"/>
+
+                <!-- If appeasementFirst is not empty, Prepare map for financial feed with the required Appeasement details -->
+                <if condition="appeasementFirst"><then>
+
+                    <!-- If the parameter contains value for facilityGroupIds, then generate a feed specific to that facilityGroupId. -->
+                    <if condition="facilityGroupIds">
+                        <entity-find-count entity-name="org.apache.ofbiz.product.facility.FacilityGroupMember" count-field="facilityGroupMemberCount">
+                            <date-filter/>
+                            <econdition field-name="facilityId" from="appeasementFirst?.returnFacilityId"/>
+                            <econdition field-name="facilityGroupId" operator="in" from="facilityGroupIds" ignore-if-empty="true"/>
+                        </entity-find-count>
+                        <if condition="facilityGroupMemberCount == 0"><continue/></if>
+                    </if>
+
+                    <!-- Get all Party Identifications for customer -->
+                    <entity-find entity-name="org.apache.ofbiz.party.party.PartyIdentification" list="partyIdentificationList">
+                        <econdition field-name="partyId" from="appeasementFirst?.customerPartyId"/>
+                    </entity-find>
+
+                    <!-- Prepare appeasements total amount -->
+                    <set field="appeasementTotalAmount" from="appeasementsList*.amount.sum()"/>
+
+                    <!-- Fetch Customer shipping address details from PostalAddressView -->
+                    <entity-find-one entity-name="co.hotwax.financial.PostalAddressView" value-field="shipToPostalAddress">
+                        <field-map field-name="contactMechId" from="appeasementFirst?.originContactMechId"/>
+                    </entity-find-one>
+
+                    <!-- Fetch OrderContactMech details for BILLING_LOCATION -->
+                    <entity-find entity-name="org.apache.ofbiz.order.order.OrderContactMech" list="billToOrderContactMechList">
+                        <econditions>
+                            <econdition field-name="orderId" from="appeasementFirst?.orderId"/>
+                            <econdition field-name="contactMechPurposeTypeId" value="BILLING_LOCATION"/>
+                        </econditions>
+                        <order-by field-name="-lastUpdatedStamp"/>
+                    </entity-find>
+
+                    <!-- If Billing details, Fetch Customer billing address details from PostalAddressView -->
+                    <if condition="billToOrderContactMechList">
+                        <!-- Fetch Customer billing address details -->
+                        <entity-find-one entity-name="co.hotwax.financial.PostalAddressView" value-field="billToPostalAddress">
+                            <field-map field-name="contactMechId" from="billToOrderContactMechList?.first?.contactMechId"/>
+                        </entity-find-one>
+                    </if>
+
+                    <!-- Get all the Payment Preferences for the return Id -->
+                    <!-- NOTE: The results are ordered by the createdDate to get the oldest payment preference record first in the list.
+                     This is done to handle the scenario of multi-part payment, that will have multiple records of a statusId for a given
+                     orderId. Further handling can be done in the custom transformations as required. -->
+                    <entity-find entity-name="co.hotwax.financial.OrderPaymentPreferenceAndType" list="orderPaymentPreferenceList">
+                        <econdition field-name="returnId" from="appeasementFirst?.returnId"/>
+                        <econdition field-name="statusId" value="PAYMENT_REFUNDED"/>
+                        <order-by field-name="createdDate"/>
+                    </entity-find>
+
+                    <!-- Prepare appeasements map to generate FF feed -->
+                    <set field="appeasementMap" from="appeasementFirst?.getMap() + [billTo:billToPostalAddress?.getMap()] +
+                        [shipTo:shipToPostalAddress?.getMap()] + [totalAmount:appeasementTotalAmount, amount:appeasement.amount, comments:appeasement.comments,
+                        customerPartyIdentifications:partyIdentificationList, payments:orderPaymentPreferenceList]"/>
+
+                    <!-- Note - This is done as part of initial implementation approach to create the Feed history records inside the iterate.
+                         TODO Explore how we can take limit while processing records, default can be 1000, it means we are generating feed for 1000 items,
+                         in that way will manage mysql transactions properly. https://git.hotwax.co/HC2/plugins/ofbiz-oms-usl/-/issues/46 -->
+                    <!-- Create record of FinancialReturnHistory to keep logs for the Appeasements FF -->
+                    <service-call name="create#co.hotwax.integration.financial.FinancialReturnHistory" in-map="[returnId:appeasementFirst?.returnId,
+                            createdDate:nowDate, comments:'Appeasement sent as part of Financial Feed CSV']"/>
+                </then><else>
+                    <log message="Financial Appeasement Sync Queue Item not found in AppeasementView, not preparing Appeasements financial feed for returnId ${appeasement.returnId}"/>
+                    <continue/>
+                </else></if>
+
+                <script>
+                    new ObjectMapper().setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                        .writerWithDefaultPrettyPrinter().writeValue(jGenerator, appeasementMap)
+                </script>
+            </iterate>
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.error("Error preparing Appeasement Financial Feed file", e)
+                }
+            }
+            </script>
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and send the file to sftp
+             using the send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[systemMessageTypeId:systemMessageTypeId, systemMessageRemoteId:systemMessageRemoteId,
+                    messageText:jsonFilePathRef, productStoreId:productStoreId]"
+                    out-map="appeasementsFeedSysMsgOut"/>
+
+            <return message="Completed the Appeasements Financial Feed from HotWax at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and remote ${systemMessageRemoteId} saved response in messages ${appeasementsFeedSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+
+    <service verb="generate" noun="ReturnsFinancialFeedOld" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>WARNING: This is deprecated, use generate#ReturnsFinancialFeed service to generate Returns Financial Feed.</description>
+        <in-parameters>
+            <parameter name="returnId">
+                <description>Parameter to fetch Return details for a specific return ID.</description>
+            </parameter>
+            <parameter name="orderId">
+                <description>Parameter to fetch Return details for a specific orderId.</description>
+            </parameter>
+            <parameter name="statusIds" default-value="RETURN_COMPLETED" type="List">
+                <description>
+                    List type Parameter to fetch the Return details for a specific Return Item Status.
+                    Defaults to RETURN_COMPLETED to always fetch completed Return Items in the Financial Feed.
+                    For passing the multiple status as list, add values like - RETURN_RECEIVED,RETURN_COMPLETED and for single value use - RETURN_COMPLETED.
+                </description>
+            </parameter>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Returns Financial Feed.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send Returns Financial Feed.</description>
+            </parameter>
+            <parameter name="sinceDate">
+                <description>Parameter to fetch Return Items created after a specified date.</description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of Product Store Ids for generating Returns Financial Feed.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <log message="Generating Returns Financial Feed from HotWax for Order ${orderId} at time ${nowDate}"/>
+
+            <!-- Fetch items from the FinancialReturnItemsSyncQueue for identifying the orders ready for preparing
+                the Returns Financial Feed -->
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                //Performing entity find operation using groovy script
+                returnsSyncQueue_find = ec.entity.find("co.hotwax.financial.FinancialReturnItemsSyncQueue")
+                    .condition("statusId", EntityCondition.ComparisonOperator.IN, statusIds)
+
+                if(orderId) returnsSyncQueue_find.condition("orderId", orderId)
+                if(returnId) returnsSyncQueue_find.condition("returnId", returnId)
+                if(productStoreIds) returnsSyncQueue_find.condition("productStoreId", EntityCondition.ComparisonOperator.IN, productStoreIds)
+                <!-- Condition on date is added to fetch return items after a particular date, this is needed to ignore the historical return items data that is not required to sync -->
+                if(sinceDate)
+                returnsSyncQueue_find.havingCondition(ec.entity.conditionFactory.makeCondition("completedDatetime", EntityCondition.ComparisonOperator.GREATER_THAN, sinceDate))
+
+                // Using try-with-resources to automatically close the EntityListIterator 'returnsSyncQueueItr'
+                try (returnItemsSyncQueueItr = returnsSyncQueue_find.iterator()) {
+            </script>
+            <!-- If no returns in FinancialReturnItemsSyncQueue, then don't generate the file -->
+            <if condition="!returnItemsSyncQueueItr.hasNext()">
+                <return message="No eligible returns to prepare Returns Financial Feed at ${nowDate}, not generating the HotWax Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds list or more than one product store ids are passed in the list,
+                then set the productStoreId to a default value as the feed being generated contains the returns for more than one product store ids. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Returns Financial Feed JSON File Path -->
+            <!-- Using the productStoreId in the file name to help in debugging. -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+                [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss'),
+                productStoreId:productStoreId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Financial Feed files  -->
+            <script>
+                try {
+                    //json file
+                    File returnsFeedFile = new File(jsonFilePath)
+                    if (!returnsFeedFile.parentFile.exists()) returnsFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the the try statement,
+                    so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, returnsFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <!-- NOTE: Below variable is added wrt preparation of tender amount. For Returns, this amount
+                    in service corresponds to total amount of the completed return items (return Price * qty)
+                    + their item level adjustments for a feed-->
+            <!-- Using Map to store the computed tender amount against each return in the eligible return
+                 items list for this pass.
+                 This map will have returnIds as keys and their tenderAmount as the values -->
+
+            <!-- Prepare TenderAmount Based on ReturnId -->
+            <set field="orderReturnTenderAmountMap" from="[:]"/>
+
+            <set field="returnTenderAmountMap" from="[:]"/>
+
+            <iterate list="returnItemsSyncQueueItr" entry="returnsSyncQueueItem">
+
+                <log message="Preparing Return Item ${returnsSyncQueueItem.returnId}:${returnsSyncQueueItem.returnItemSeqId} for the Returns Financial Feed."/>
+
+                <!-- If the returnId does not exist in map, then prepare the amount, else use amount from the map -->
+                <if condition="!returnTenderAmountMap.containsKey(returnsSyncQueueItem.returnId)">
+                    <!-- Find the Return Items for this return Id from the eligible Return Items list -->
+                    <entity-find entity-name="co.hotwax.financial.FinancialReturnItemsSyncQueue" list="returnItemsList">
+                        <econdition field-name="returnId" from="returnsSyncQueueItem.returnId"/>
+                        <econdition field-name="statusId" from="statusIds" operator="in"/>
+                        <select-field field-name="returnId,returnItemSeqId"/>
+                    </entity-find>
+                    <set field="returnItemSeqIdList" from="returnItemsList*.returnItemSeqId"/>
+
+                    <!-- Prepare the Tender Amount for the Return Items -->
+                    <service-call name="co.hotwax.ofbiz.FinancialFeedServices.calculate#ReturnsTenderAmount"
+                            in-map="[returnId:returnsSyncQueueItem.returnId,
+                            returnItemSeqIdList:returnItemSeqIdList, statusIds:statusIds]"
+                            out-map="tenderAmountOut"/>
+
+                    <script>returnTenderAmountMap.put(returnsSyncQueueItem.returnId, tenderAmountOut.amount)</script>
+                </if>
+                <if condition="!orderReturnTenderAmountMap.containsKey(returnsSyncQueueItem.orderId)">
+                    <!-- Prepare the Tender Amount for the Return -->
+                    <service-call name="co.hotwax.ofbiz.FinancialFeedServices.calculate#OrderReturnsTenderAmount"
+                           in-map="[orderId:returnsSyncQueueItem.orderId,statusIds:statusIds]"
+                           out-map="orderTenderAmountOut"/>
+                    <script>orderReturnTenderAmountMap.put(returnsSyncQueueItem.orderId, orderTenderAmountOut.totalAmount)</script>
+                </if>
+                <!-- TODO Refactor below code as part of separate task to move inside the  orderItemDetails empty check;
+                    as we should not fetch these details if we do not find the return in entity find on second view;
+                    these db calls can be avoided -->
+                <!-- Fetch all ReturnAdjustments to prepare the Return level and Return Item level adjustments list -->
+                <!-- The Return level adjustments will include adjustments like Shipping Charges, Shipping Sales Tax etc.
+                    The Return Item level adjustments will include adjustments like Item Sales Tax, Item Discount etc. -->
+                <entity-find entity-name="org.apache.ofbiz.order.return.ReturnAdjustment" list="returnAdjustmentList">
+                    <econdition field-name="returnId" from="returnsSyncQueueItem.returnId"/>
+                </entity-find>
+
+                <set field="returnItemAdjustmentsList" from="returnAdjustmentList.findAll({returnsSyncQueueItem.returnItemSeqId.equals(it.returnItemSeqId)})"/>
+                <set field="returnAdjustmentsList" from="returnAdjustmentList.findAll({'_NA_'.equals(it.returnItemSeqId)})"/>
+
+                <!-- Preparing returnItemAdjustmentTotal for item level, excluding Shipping charges
+                 commented below field because we are already commented the related fields. -->
+<!--                <set field="returnItemAdjustmentTotal" from="returnItemSalesTaxTotal + returnItemDiscount"  type="BigDecimal"/>-->
+
+                <!-- Get the sum of return item's amount(returnPrice * quantity) for each returnId -->
+                <entity-find entity-name="org.apache.ofbiz.order.return.ReturnItem" list="returnItemList">
+                    <econdition field-name="returnId" from="returnsSyncQueueItem.returnId"/>
+                </entity-find>
+
+                <!-- TODO For now preparing total amount for a Return item, commented below code for preparing total return amount
+                as it did not cover Return Adjustments of other items in the same Return. Discuss if the total amount is needed for returns, else we can check to remove it. -->
+                <!--<set field="returnItemTotalAmount" from="0"/>
+                <iterate list="returnItemList" entry="returnItem">
+                    <set field="returnItemAmount" from="(returnItem.returnPrice).multiply(returnItem.returnQuantity)" type="BigDecimal"/>
+                    <set field="returnItemTotalAmount" from="returnItemTotalAmount + returnItemAmount"/>
+                </iterate>-->
+
+                 <!-- Prepare the returnsTotalAmount for returnId -->
+                <!--<set field="returnsTotalAmount" from="returnItemTotalAmount + returnItemAdjustmentTotal + shippingChargesTotal + shippingSalesTaxTotal" type="BigDecimal"/>-->
+
+                <!-- Prepare the returnItemTotalAmount for returnId
+                This field will be commented below code for preparing TENDER amount -->
+<!--                <set field="returnItemTotalAmount" from="returnItemAdjustmentTotal + shippingChargesTotal + shippingSalesTaxTotal" type="BigDecimal"/>-->
+
+                <!-- Fetch the Return Item details from the ReturnItemView -->
+                <entity-find-one entity-name="co.hotwax.financial.ReturnItemView" value-field="returnItemDetail">
+                    <field-map field-name="returnId" from="returnsSyncQueueItem?.returnId"/>
+                    <field-map field-name="returnItemSeqId" from="returnsSyncQueueItem?.returnItemSeqId"/>
+                </entity-find-one>
+
+                <!-- If returnItemDetail is not empty, Prepare map for financial feed with the required return item details -->
+                <if condition="returnItemDetail"><then>
+
+                    <!-- Fetch the Shipping PostalAddress details from PostalAddressView -->
+                    <entity-find-one entity-name="co.hotwax.financial.PostalAddressView" value-field="shipToPostalAddress">
+                        <field-map field-name="contactMechId" from="returnItemDetail?.shipToContactMechId"/>
+                    </entity-find-one>
+
+                    <!-- Get the contactMechId from OrderContactMech to fetch the billing details from PostalAddressView  -->
+                    <entity-find entity-name="org.apache.ofbiz.order.order.OrderContactMech" list="billOrderContactMechList">
+                        <econdition field-name="orderId" from="returnItemDetail?.orderId"/>
+                        <econdition field-name="contactMechPurposeTypeId" value="BILLING_LOCATION"/>
+                        <order-by field-name="-lastUpdatedStamp"/>
+                    </entity-find>
+
+                    <!-- If billOrderContactMechList is not empty, Prepare map for billing details from PostalAddressView -->
+                    <if condition="billOrderContactMechList">
+                        <!-- Fetch the Billing PostalAddress details from PostalAddressView -->
+                        <entity-find-one entity-name="co.hotwax.financial.PostalAddressView" value-field="billToPostalAddress">
+                            <field-map field-name="contactMechId" from="billOrderContactMechList.first?.contactMechId"/>
+                        </entity-find-one>
+                    </if>
+
+                    <!-- Get all Good Identifications for Product -->
+                    <entity-find entity-name="org.apache.ofbiz.product.product.GoodIdentification" list="goodIdentificationList">
+                        <econdition field-name="productId" from="returnItemDetail?.productId"/>
+                        <date-filter/>
+                    </entity-find>
+
+                    <!-- Get all Party Identifications for a partyId -->
+                    <entity-find entity-name="org.apache.ofbiz.party.party.PartyIdentification" list="partyIdentificationList">
+                        <econdition field-name="partyId" from="returnItemDetail?.customerPartyId"/>
+                    </entity-find>
+
+                    <!-- Get all the Payment Preferences for the return Id -->
+                    <entity-find entity-name="co.hotwax.financial.OrderPaymentPreferenceAndType" list="orderPaymentPreferenceList">
+                        <econdition field-name="returnId" from="returnItemDetail?.returnId"/>
+                        <econdition field-name="statusId" value="PAYMENT_REFUNDED"/>
+                    </entity-find>
+
+                    <set field="returnItemMap" from="returnItemDetail?.getMap() + [billTo:billToPostalAddress] +
+                        [shipTo:shipToPostalAddress] + [completedDatetime:returnsSyncQueueItem.completedDatetime,
+                        returnAdjustments:returnAdjustmentsList, returnItemAdjustments:returnItemAdjustmentsList,
+                        productIdentifications:goodIdentificationList, customerPartyIdentifications:partyIdentificationList,
+                        tenderAmount:returnTenderAmountMap.get(returnsSyncQueueItem.returnId), orderTenderAmount:orderReturnTenderAmountMap.get(returnsSyncQueueItem.orderId), payments:orderPaymentPreferenceList]"/>
+
+                    <!-- Note - This is done as part of initial implementation approach to create the Feed history records inside the iterate.
+                        TODO Explore how we can take limit while processing records, default can be 1000, it means we are generating feed for 1000 items,
+                        in that way will manage mysql transactions properly. https://git.hotwax.co/HC2/plugins/ofbiz-oms-usl/-/issues/46 -->
+                    <!-- Create record of FinancialReturnHistory to keep logs for the Returns FF -->
+                    <service-call name="create#co.hotwax.integration.financial.FinancialReturnHistory" in-map="[returnId:returnItemDetail?.returnId,
+                            returnItemSeqId:returnItemDetail?.returnItemSeqId, createdDate:nowDate,
+                            comments:'Return sent as part of Financial Feed CSV']"/>
+                </then><else>
+                    <log message="Financial Return Sync Queue Item not found in ReturnItemView, not preparing Returns financial feed for returnId ${returnsSyncQueueItem.returnId}"/>
+                    <continue/>
+                </else></if>
+
+                <script>
+                    new ObjectMapper().setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                        .writerWithDefaultPrettyPrinter().writeValue(jGenerator, returnItemMap)
+                </script>
+            </iterate>
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.error("Error preparing Return Financial Feed files", e)
+                }
+            }
+            </script>
+
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and send the file to sftp
+             using the send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[systemMessageTypeId:systemMessageTypeId, systemMessageRemoteId:systemMessageRemoteId,
+                    messageText:jsonFilePathRef, productStoreId:productStoreId]" out-map="returnFeedSysMsgOut"/>
+
+            <return message="Created the Returns Financial Feed from HotWax at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and remote ${systemMessageRemoteId} saved response in messages ${returnFeedSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+
+    <service verb="generate" noun="SalesFinancialFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <in-parameters>
+            <parameter name="orderId">
+                <description>Parameter to fetch Order details for a specific orderId.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send the Financial Feed.</description>
+            </parameter>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Sales Financial Feed.</description>
+            </parameter>
+            <parameter name="sinceDate">
+                <description>Parameter to fetch Order Items created after a specified date.</description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of Product Store Ids for generating Sales Financial Feed.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+            <parameter name="isPhysical">
+                <description>
+                    For passing the IsPhysical values like
+                    1. isPhysical = 'Y' - Include Physical good type items.
+                    2. isPhysical = 'N' - Include all the type of goods excluding the Physical good type items.
+                    3. If we are not passing anything in the isPhysical then all the type of goods will be
+                    considered for the feed.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+
+            <log message="Generating HotWax Sales Financial Feed file for Order ${orderId} at time ${nowDate}"/>
+
+            <!-- Fetch items from the FinancialOrderItemsSyncQueue for identifying the orders ready for preparing
+                the Sales Financial Feed -->
+
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.text.SimpleDateFormat
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                //Performing entity find operation using groovy script
+                orderItemsSyncQueue_find = ec.entity.find("co.hotwax.financial.FinancialOrderItemsSyncQueue")
+                .condition("statusId", "ITEM_COMPLETED")
+
+                if(orderId) orderItemsSyncQueue_find.condition("orderId", orderId)
+                if(productStoreIds) orderItemsSyncQueue_find.condition("productStoreId", EntityCondition.ComparisonOperator.IN, productStoreIds)
+                if(isPhysical) orderItemsSyncQueue_find.condition("isPhysical", isPhysical)
+                <!-- Condition on date is added to fetch orders after a particular date, this is needed to ignore the historical orders data that is not required to sync. -->
+                if(sinceDate) orderItemsSyncQueue_find.condition("completedDatetime", EntityCondition.ComparisonOperator.GREATER_THAN, sinceDate)
+
+                // Using try-with-resources to automatically close the EntityListIterator 'orderItemsSyncQueueItr'
+                try (orderItemsSyncQueueItr = orderItemsSyncQueue_find.iterator()) {
+            </script>
+
+            <!-- If no orders in FinancialOrderItemsSyncQueue, then don't generate the file -->
+            <if condition="!orderItemsSyncQueueItr.hasNext()">
+                <return message="No eligible orders for Sales Financial Feed at ${nowDate}, not generating the HotWax Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds or more than one productStoreIds are passed in the list,
+                then set the productStoreId to a default value as the feed being generated contains the orders for more than one product store ids. -->
+            <!-- If productStoreIds list contains one value then set the productStoreId from the list. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Sales Financial Feed JSON File Path -->
+            <!-- Using the productStoreId in the file name to help in debugging. -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+                [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS'),
+                productStoreId:productStoreId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Financial Feed file -->
+            <script>
+                try {
+                    //json file
+                    File salesFeedFile = new File(jsonFilePath)
+                    if (!salesFeedFile.parentFile.exists()) salesFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, salesFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <!-- NOTE: Below variable is added for preparation of tender amount. For Sales, this amount
+                    in service corresponds to total amount of the completed Sales order items (unit price * qty)
+                    + their item level adjustments for a feed-->
+            <!-- Using Map to store the computed tender amount against each order in the eligible order
+                 items list for this pass.
+                 This map will have orderIds as keys and their tenderAmount as the values -->
+            <set field="orderTenderAmountMap" from="[:]"/>
+            <iterate list="orderItemsSyncQueueItr" entry="ordersSyncQueueItem">
+
+                <log message="Preparing Order Item ${ordersSyncQueueItem.orderId}:${ordersSyncQueueItem.orderItemSeqId} for the Sales Financial Feed."/>
+
+                <!-- If the orderId does not exist in map, then prepare the amount, else use amount from the map -->
+                <if condition="!orderTenderAmountMap.containsKey(ordersSyncQueueItem.orderId)">
+
+                    <!-- Find the order Items for this order Id from the eligible Order Items list -->
+                    <entity-find entity-name="co.hotwax.financial.FinancialOrderItemsSyncQueue" list="orderItemList">
+                        <econdition field-name="orderId" from="ordersSyncQueueItem.orderId"/>
+                        <econdition field-name="isPhysical" from="isPhysical" ignore-if-empty="true"/>
+                        <econdition field-name="statusId" value="ITEM_COMPLETED"/>
+                        <select-field field-name="orderId,orderItemSeqId"/>
+                    </entity-find>
+
+                    <set field="orderItemSeqIdList" from="orderItemList*.orderItemSeqId"/>
+
+                    <!-- Prepare the Tender Amount for the Order Items -->
+                    <service-call name="co.hotwax.ofbiz.FinancialFeedServices.calculate#OrderTenderAmount"
+                            in-map="[orderId:ordersSyncQueueItem.orderId, orderItemSeqIdList:orderItemSeqIdList,
+                            statusId:'ITEM_COMPLETED']" out-map="tenderAmountOut"/>
+                    <script>
+                        orderTenderAmountMap.put(ordersSyncQueueItem.orderId,tenderAmountOut.amount)
+                    </script>
+                </if>
+
+                <!-- TODO: Check to select the required fields only. For now getting all the fields as most of the fields are needed for Sales FF -->
+                <!-- Fetch the Order Item details from the SalesOrderView -->
+                <entity-find entity-name="co.hotwax.financial.SalesOrderView" list="orderItemDetails" distinct="true">
+                    <econdition field-name="orderId" from="ordersSyncQueueItem.orderId"/>
+                    <econdition field-name="orderItemSeqId" from="ordersSyncQueueItem.orderItemSeqId"/>
+                </entity-find>
+
+                <!-- Set the first element of the list -->
+                <set field="orderItemFirst" from="orderItemDetails?.first"/>
+
+                <!-- If orderItemFirst is not empty, prepare map for financial feed with the required order details -->
+                <if condition="orderItemFirst"><then>
+
+                    <!-- Fetch all OrderAdjustments to prepare the Order level and Item level adjustments list -->
+                    <!-- The Order level adjustments will include adjustments like Shipping Charges, Shipping Sales Tax, 
+                        Shipping Adjustments etc. and the Item level Adjustments will include adjustments like 
+                        Item Sales Tax, Item Discount etc. -->
+                    <entity-find entity-name="org.apache.ofbiz.order.order.OrderAdjustment" list="orderAdjustmentList">
+                        <econdition field-name="orderId" from="orderItemFirst.orderId"/>
+                    </entity-find>
+
+                    <set field="orderItemAdjustmentsList" from="orderAdjustmentList.findAll({orderItemFirst.orderItemSeqId.equals(it.orderItemSeqId)})"/>
+                    <set field="orderAdjustmentsList" from="orderAdjustmentList.findAll({'_NA_'.equals(it.orderItemSeqId)})"/>
+
+                    <!-- Get the contactMechId from OrderContactMech to fetch the billing details from PostalAddressView -->
+                    <entity-find entity-name="org.apache.ofbiz.order.order.OrderContactMech" list="billOrderContactMechList">
+                        <econdition field-name="orderId" from="orderItemFirst.orderId"/>
+                        <econdition field-name="contactMechPurposeTypeId" value="BILLING_LOCATION"/>
+                        <order-by field-name="-lastUpdatedStamp"/>
+                    </entity-find>
+
+                    <!-- If billOrderContactMechList then fetch the billTo details from PostalAddressView using the contactMechId -->
+                    <if condition="billOrderContactMechList">
+                        <entity-find-one entity-name="co.hotwax.financial.PostalAddressView" value-field="billToAddress">
+                            <field-map field-name="contactMechId" from="billOrderContactMechList?.first?.contactMechId"/>
+                        </entity-find-one>
+                    </if>
+
+                    <!-- Get the shipTo details from PostalAddressView using the shipToContactMechId of SalesOrderView -->
+                    <entity-find-one entity-name="co.hotwax.financial.PostalAddressView" value-field="shipToAddress">
+                        <field-map field-name="contactMechId" from="orderItemFirst.shipToPostalContactMechId"/>
+                    </entity-find-one>
+
+                    <!-- Fetch the Customer Party ID for the order with roleTypeId = 'BILL_TO_CUSTOMER' -->
+                    <entity-find entity-name="org.apache.ofbiz.order.order.OrderRole" list="billToCustomerMap">
+                        <econdition field-name="orderId" from="orderItemFirst.orderId"/>
+                        <econdition field-name="roleTypeId" value="BILL_TO_CUSTOMER"/>
+                        <date-filter/>
+                    </entity-find>
+
+                    <!-- Fetch Customer details from the PartyDetailView View -->
+                    <entity-find-one entity-name="org.apache.ofbiz.party.party.PartyDetailView" value-field="customerPartyMap">
+                        <field-map field-name="partyId" from="billToCustomerMap[0].partyId"/>
+                    </entity-find-one>
+
+                    <!-- Preparing the details of the Customer -->
+                    <set field="customerFirstName" from="customerPartyMap?.firstName"/>
+                    <set field="customerLastName" from="customerPartyMap?.lastName"/>
+
+                    <!-- Get all Good Identifications for Product -->
+                    <entity-find entity-name="org.apache.ofbiz.product.product.GoodIdentification" list="goodIdentificationList">
+                        <econdition field-name="productId" from="orderItemFirst.productId"/>
+                        <date-filter/>
+                    </entity-find>
+
+                    <!-- Get all the Payment Preferences for an orderId -->
+                    <!-- NOTE : 1. Condition added to exclude payment preferences for the statusId='PAYMENT_REFUNDED'as it is not applicable for the completed Sales Order Items Feed.
+                    2. The results are ordered by the createdDate to get the oldest payment preference record first in the list.
+                    3. This is done to handle the scenario of multi-part payment, that will have multiple records of a statusId for a given orderId.
+                    4. Further handling can be done in the custom transformations as required. -->
+                    <entity-find entity-name="co.hotwax.financial.OrderPaymentPreferenceAndType" list="orderPaymentPreferenceList">
+                        <econdition field-name="orderId" from="orderItemFirst.orderId"/>
+                        <econdition field-name="statusId" operator="not-equals" value="PAYMENT_REFUNDED"/>
+                        <order-by field-name="createdDate"/>
+                    </entity-find>
+
+                    <!-- Prepare the map for Sales financial feed with required orderItemDetails -->
+                    <!-- If billToAddress is empty, then set billTo as null -->
+                    <set field="orderItemDetail" from="orderItemFirst.getMap() + [customerFirstName:customerFirstName, customerLastName:customerLastName,billTo:billToAddress?.getMap(), shipTo:shipToAddress?.getMap(), productIdentifications:goodIdentificationList,
+                        completedDatetime:ordersSyncQueueItem.completedDatetime, orderAdjustments:orderAdjustmentsList, orderItemAdjustments:orderItemAdjustmentsList, payments:orderPaymentPreferenceList,
+                        tenderAmount:orderTenderAmountMap.get(ordersSyncQueueItem.orderId)]"/>
+
+                    <!-- Note - This is done as part of initial implementation approach to create the Feed history records inside the iterate.
+                         TODO Explore how we can take limit while processing records, default can be 1000, it means we are generating feed for 1000 items,
+                         in that way will manage mysql transactions properly. https://git.hotwax.co/HC2/plugins/ofbiz-oms-usl/-/issues/46 -->
+                    <!-- Create record of FinancialOrderHistory to keep logs for the Sales FF -->
+                    <service-call name="create#co.hotwax.integration.financial.FinancialOrderHistory" in-map="[orderId:orderItemFirst?.orderId,
+                            orderItemSeqId:orderItemFirst?.orderItemSeqId, createdDate:nowDate, comments:'Order sent as part of Sales Financial Feed CSV']"/>
+                </then><else>
+                    <log message="Financial Order Sync Queue Item not found in SalesOrderView, not preparing Sales financial feed for orderId ${ordersSyncQueueItem.orderId}"/>
+                    <continue/>
+                </else></if>
+
+                <script>
+                    new ObjectMapper().setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                        .writerWithDefaultPrettyPrinter().writeValue(jGenerator, orderItemDetail)
+
+                </script>
+            </iterate>
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.error("Error preparing Sales Financial Feed file", e)
+                }
+            }
+            </script>
+
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and send the file to sftp
+             using the send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[systemMessageTypeId:systemMessageTypeId, systemMessageRemoteId:systemMessageRemoteId,
+                    messageText:jsonFilePathRef, productStoreId:productStoreId]" out-map="salesFeedSysMsgOut"/>
+
+            <return message="Completed the HotWax Sales Financial Feed file at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and remote ${systemMessageRemoteId} saved response in messages ${salesFeedSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+
+    <service verb="calculate" noun="OrderTenderAmount" authenticate="anonymous-all" transaction-timeout="1800">
+        <description>
+            Service to get the tender amount of an Order.
+            The tender amount is (unitPrice * quantity) +  Item level adjustments for all the order items for an order.
+        </description>
+        <in-parameters>
+            <parameter name="orderId" required="true">
+                <description>The HC orderId to compute the tender amount for an Order.</description>
+            </parameter>
+            <parameter name="orderItemSeqIdList" type="List" required="true">
+                <description>The list of HC Order Item Seq Ids to compute the tender amount for an order.</description>
+            </parameter>
+            <parameter name="statusId">
+                <description>The Order Item Status Id to compute the tender amount for an order.</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="amount" type="BigDecimal">
+                <description>The computed tender amount of an Order for the given Order Item Ids.</description>
+            </parameter>
+        </out-parameters>
+
+        <actions>
+            <!-- Tender amount will be prepared by calculating Order Item Total i.e.
+                (Unit Price * Qty) + Order Item Adjustment amount (sum done in view)
+                for the incoming order items in the service -->
+            <entity-find entity-name="co.hotwax.financial.OrderItemAndAdjustment" list="orderItemsList">
+                <econdition field-name="orderId"/>
+                <econdition field-name="orderItemSeqId" operator="in" from="orderItemSeqIdList"/>
+                <econdition field-name="statusId" ignore-if-empty="true"/>
+                <select-field field-name="orderId,orderItemSeqId,unitPrice,quantity,amount"/>
+            </entity-find>
+
+            <!-- Prepare tender amount -->
+            <set field="amount" from="0.0"/>
+
+            <iterate list="orderItemsList" entry="orderItem">
+                <set field="orderItemAmount" from="(orderItem.unitPrice).multiply(orderItem.quantity)" type="BigDecimal"/>
+                <set field="amount" from="amount + orderItemAmount + (orderItem.amount ?: 0)" type="BigDecimal"/>
+            </iterate>
+        </actions>
+    </service>
+
+    <service verb="calculate" noun="ReturnsTenderAmount" authenticate="anonymous-all" transaction-timeout="1800">
+        <description>
+            Service to calculate Tender Amount for a Return.
+            Tender Amount is ReturnItemTotal (returnPrice * returnQuantity) + ReturnItemAdjustments for all
+            the given Return Items for a particular Return Status.
+        </description>
+        <in-parameters>
+            <parameter name="returnId" required="true">
+                <description>The Return ID of HC to compute the Tender Amount for a return.</description>
+            </parameter>
+            <parameter name="returnItemSeqIdList" type="List" required="true">
+                <description>The list of Return Item Seq ID of HC to compute the Tender Amount for a return.</description>
+            </parameter>
+            <parameter name="statusIds" type="List">
+                <description>The Return Item status ID of HC to compute the Tender Amount for a return.</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="amount" type="BigDecimal">
+                <description>The computed tender amount for a Return for given Return Item Ids.</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <!-- Tender amount will be prepared by calculating Return Item Total i.e.
+                (Return Price * Qty) + Return Item Adjustment amount (sum done in view)
+                for the incoming return items in the service -->
+            <entity-find entity-name="co.hotwax.financial.ReturnItemAndAdjustment" list="returnItemAdjustmentsList">
+                <econdition field-name="returnId"/>
+                <econdition field-name="returnItemSeqId" from="returnItemSeqIdList" operator="in"/>
+                <econdition field-name="statusId" from="statusIds" operator="in" />
+                <select-field field-name="returnId,returnItemSeqId,returnPrice,returnQuantity,amount"/>
+            </entity-find>
+
+            <!-- Prepare tender amount -->
+            <set field="amount" from="0.0"/>
+
+            <iterate list="returnItemAdjustmentsList" entry="returnItemAdjustment">
+                <set field="returnItemAmount" from="(returnItemAdjustment.returnPrice).multiply(returnItemAdjustment.returnQuantity)" type="BigDecimal"/>
+                <set field="amount" from="amount + returnItemAmount + (returnItemAdjustment.amount ?: 0)" type="BigDecimal"/>
+            </iterate>
+        </actions>
+    </service>
+
+    <service verb="calculate" noun="OrderReturnsTenderAmount" authenticate="anonymous-all" transaction-timeout="7200">
+        <in-parameters>
+            <parameter name="orderId"/>
+            <parameter name="statusIds" type="List">
+                <description>The Return status ID of HC to compute the Tender Amount for a return.</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="totalAmount">
+                <description>The computed tender amount for a Return corresponding to Order.</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+
+            <entity-find entity-name="co.hotwax.financial.ReturnItemAndAdjustment" list="returnAdjustmentsList">
+                <econdition field-name="orderId"/>
+                <econdition field-name="statusId" from="statusIds" operator="in"/>
+                <select-field field-name="returnId,orderId,returnItemSeqId,returnPrice,returnQuantity,amount"/>
+            </entity-find>
+
+            <!-- Prepare total tender amount -->
+            <set field="totalAmount" from="0.0"/>
+            <iterate list="returnAdjustmentsList" entry="returnAdjustment">
+                <set field="returnAmount" from="(returnAdjustment.returnPrice).multiply(returnAdjustment.returnQuantity)" type="BigDecimal"/>
+                <set field="totalAmount" from="totalAmount + returnAmount + (returnAdjustment.amount ?: 0)" type="BigDecimal"/>
+            </iterate>
+        </actions>
+    </service>
+
+    <service verb="generate" noun="ReturnsFinancialFeed" authenticate="anonymous-all" transaction-timeout="7200">
+        <description>Service to generate Returns Financial Feed. The feed will be generated Return Header wise, with each return containing 
+            the list of items returned.</description>
+        <in-parameters>
+            <parameter name="returnId">
+                <description>Parameter to fetch Return details for a specific returnId.</description>
+            </parameter>
+            <parameter name="statusIds" default-value="RETURN_COMPLETED" type="List">
+                <description>
+                    List type Parameter to fetch the Return details for a specific Return Item Status.
+                    Defaults to RETURN_COMPLETED to always fetch completed Return Items in the Financial Feed.
+                    For passing the multiple status as list, add values like - RETURN_RECEIVED,RETURN_COMPLETED and for single value use - RETURN_COMPLETED.
+                </description>
+            </parameter>
+            <parameter name="orderId">
+                <description>Parameter to fetch Return details for a specific orderId.</description>
+            </parameter>
+            <parameter name="systemMessageTypeId" required="true">
+                <description>The System Message Type ID for generating Returns Financial Feed.</description>
+            </parameter>
+            <parameter name="systemMessageRemoteId" required="true">
+                <description>The System Message Remote ID to send Returns Financial Feed.</description>
+            </parameter>
+            <parameter name="sinceReturnDate">
+                <description>
+                    Parameter to fetch Returns after a specific Return Date.
+                    This date corresponds to the ReturnHeader.returnDate in HC.
+                </description>
+            </parameter>
+            <parameter name="sinceReturnCompletedDate">
+                <description>
+                    Parameter to fetch Returns which are completed in HC after a specific Date.
+                    This date corresponds to the ReturnStatus.completedDatetime for Return Items in HC.
+                </description>
+            </parameter>
+            <parameter name="sinceEntryDate">
+                <description>
+                    Parameter to fetch Returns created after a specific Date in HC.
+                    This date corresponds to the ReturnHeader.entryDate in HC.
+                </description>
+            </parameter>
+            <parameter name="productStoreIds" type="List">
+                <description>
+                    List of Product Store Ids for generating Returns Financial Feed.
+                    For passing the Product Store Ids as list, add values like - SM_STORE,SG_STORE and for single value use - SM_STORE.
+                </description>
+            </parameter>
+            <parameter name="returnChannelEnumId">
+                <description>
+                    Identify the Returns being made from different channels like Ecom Returns, In-Store etc.
+                </description>
+            </parameter>
+            <parameter name="customParametersMap" type="Map">
+                <description>
+                    This map defines custom conditions to fetch Return Items, allowing flexibility to add new conditions dynamically. This parameter expects map in a specific format including suffixes like *_op for operators and *_ic for case-insensitivity. Eg. If we want to fetch returns for which returnReasonId exists, we can add the map like {"returnReasonId_op": "empty", "returnReasonId_not": "Y"}. 
+                </description>
+            </parameter>
+            <parameter name="facilityGroupIds" type="List">
+                <description>
+                    List of facility group ids for generating Brokered Orders Items Feed.
+                    For passing the facility group ids as list, add values like - M3_FAC, BJ_FAC_GRP and for single value use - M3_FAC.
+                </description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <set field="nowDate" from="ec.user.nowTimestamp"/>
+            <log message="Generating Returns Financial Feed from HotWax for Order ${orderId} at time ${nowDate}"/>
+            <!-- Removed orderId,orderSalesChannelEnumId,orderSalesChannel and shopId fields from the select fields
+                as in case of one return being associated with multiple orders (the original order and the exchange order) these fields
+                can be different and will give duplicate returnIds while fetching eligible returns -->
+            <script>
+                import com.fasterxml.jackson.core.JsonGenerator
+                import com.fasterxml.jackson.core.JsonFactory
+                import com.fasterxml.jackson.databind.ObjectMapper
+                import java.nio.charset.StandardCharsets
+                import org.moqui.entity.EntityCondition
+
+                //Performing entity find operation using groovy script
+                <!-- Fetch eligible Returns from the FinancialReturnItemsSyncQueue for preparing the Returns Financial Feed -->
+                returnsSyncQueue_find = ec.entity.find("co.hotwax.financial.FinancialReturnItemsSyncQueue")
+                    .searchFormMap(customParametersMap, null, "", "", false)
+                    .condition("statusId", EntityCondition.ComparisonOperator.IN, statusIds)
+
+                if(orderId) returnsSyncQueue_find.condition("orderId", orderId)
+                if(returnId) returnsSyncQueue_find.condition("returnId", returnId)
+                if(productStoreIds) returnsSyncQueue_find.condition("productStoreId", EntityCondition.ComparisonOperator.IN, productStoreIds)
+                <!-- Condition on date is added to fetch return items after a particular Return date, this is needed to ignore the historical return items data that is not required to sync -->
+                if(sinceReturnDate) returnsSyncQueue_find.condition("returnDate", EntityCondition.ComparisonOperator.GREATER_THAN, sinceReturnDate)
+                <!-- Condition on date is added to fetch return items after a particular date when they are created in HC. -->
+                if(sinceEntryDate) returnsSyncQueue_find.condition("entryDate", EntityCondition.ComparisonOperator.GREATER_THAN, sinceEntryDate)
+                <!-- Condition on return Channel Enum Id is added to fetch all returns completed from any specific channel like from Ecom (Shopify), In-Store Returns etc. -->
+                if(returnChannelEnumId) returnsSyncQueue_find.condition("returnChannelEnumId", returnChannelEnumId)
+                <!-- Condition on date is added to fetch return items completed after a particular date. -->
+                if(sinceReturnCompletedDate) returnsSyncQueue_find.havingCondition(ec.entity.conditionFactory.makeCondition("completedDatetime", EntityCondition.ComparisonOperator.GREATER_THAN, sinceReturnCompletedDate))
+
+                returnsSyncQueue_find.selectField("returnId,productStoreId,completedDatetime,productStoreExternalId,customerPartyId,returnDate,entryDate,returnChannelEnumId,returnStatusId")
+
+                // Using try-with-resources to automatically close the EntityListIterator 'returnsSyncQueueItr'
+                try (returnsSyncQueueItr = returnsSyncQueue_find.iterator()) {
+            </script>
+            
+            <!-- If no returns in FinancialReturnItemsSyncQueue, then don't generate the file -->
+            <if condition="!returnsSyncQueueItr.hasNext()">
+                <return message="No eligible returns to prepare Returns Financial Feed at ${nowDate}, not generating the HotWax Feed file."/>
+            </if>
+
+            <!-- Check if nothing is passed in productStoreIds list or more than one product store ids are passed in the list,
+                then set the productStoreId to a default value as the feed being generated contains the returns for more than one product store ids. -->
+            <set field="productStoreId" from="(!productStoreIds || productStoreIds.size() > 1) ? System.getProperty('hotwax_feed_default_prefix') : productStoreIds[0]"/>
+
+            <!-- Fetch the receivePath from SystemMessageType to prepare the path for creating the file in the receiving system. Ex: Moqui's datamanager directory in runtime for creating feeds.-->
+            <entity-find-one entity-name="moqui.service.message.SystemMessageType" value-field="systemMessageType"/>
+            <if condition="systemMessageType == null"><return error="true" message="Could not find SystemMessageType with ID ${systemMessageTypeId}"/></if>
+
+            <!-- Prepare Returns Financial Feed JSON File Path -->
+            <!-- Using the productStoreId in the file name to generate brand wise feeds. -->
+            <!-- Using receivePath from SystemMessageType to prepare the jsonFilePathRef.-->
+            <!-- NOTE Added support of Shop Id to generate the feeds shop wise; this is for the set up
+                 with single Product Store associated with multiple shops. This will be set only if 
+                 feeds is set up to run per shop, else no change. -->
+            <set field="jsonFilePathRef" from="ec.resource.expand(systemMessageType.receivePath, null,
+                [contentRoot: ec.user.getPreference('mantle.content.root') ?: 'dbresource://datamanager', date:ec.l10n.format(nowDate, 'yyyy-MM-dd'), dateTime:ec.l10n.format(nowDate, 'yyyy-MM-dd-HH-mm-ss-SSS'),
+                productStoreId:productStoreId,shopId:customParametersMap?.shopId], false)"/>
+            <set field="jsonFilePath" from="ec.resource.getLocationReference(jsonFilePathRef).getUri().getPath()"/>
+
+            <!-- Prepare the Financial Feed files  -->
+            <script>
+                try {
+                    //json file
+                    File returnsFeedFile = new File(jsonFilePath)
+                    if (!returnsFeedFile.parentFile.exists()) returnsFeedFile.parentFile.mkdirs()
+                    JsonFactory jfactory = new JsonFactory()
+
+                    /* Declaring the PrintWriter and JsonGenerator resources in the try statement,
+                        so that they are automatically closed regardless of whether the try statement completes normally or abruptly. */
+                    try (PrintWriter pw = new PrintWriter(StandardCharsets.UTF_8, returnsFeedFile);
+                         JsonGenerator jGenerator = jfactory.createGenerator(pw)) {
+                        jGenerator.writeStartArray()
+            </script>
+
+            <iterate list="returnsSyncQueueItr" entry="returnHeader">
+
+                <log message="Preparing Return ${returnHeader.returnId} for the Returns Financial Feed."/>
+
+                <!-- Fetch all ReturnAdjustments to prepare the Return level and Return Item level adjustments list -->
+                <!-- The Return level adjustments will include adjustments like Shipping Charges, Shipping Sales Tax etc.
+                    The Return Item level adjustments will include adjustments like Item Sales Tax, Item Discount etc. -->
+                <entity-find entity-name="org.apache.ofbiz.order.return.ReturnAdjustment" list="returnAdjustmentList">
+                    <econdition field-name="returnId" from="returnHeader.returnId"/>
+                </entity-find>
+
+                <!-- Prepare the Return Level Adjustments -->
+                <set field="returnAdjustmentsList" from="returnAdjustmentList.findAll({'_NA_'.equals(it.returnItemSeqId)})"/>
+
+                <!-- Get all Party Identifications for a partyId -->
+                <entity-find entity-name="org.apache.ofbiz.party.party.PartyIdentification" list="partyIdentificationList">
+                    <econdition field-name="partyId" from="returnHeader.customerPartyId"/>
+                </entity-find>
+
+                <!-- Get all the Payment Preferences for the return Id -->
+                <!-- NOTE: The results are ordered by the createdDate to get the oldest payment preference record first in the list.
+                     This is done to handle the scenario of multi-part payment, that will have multiple records of a statusId for a given
+                     orderId. Further handling can be done in the custom transformations as required. -->
+                <entity-find entity-name="co.hotwax.financial.OrderPaymentPreferenceAndType" list="orderPaymentPreferenceList">
+                    <econdition field-name="returnId" from="returnHeader.returnId"/>
+                    <econdition field-name="statusId" value="PAYMENT_REFUNDED"/>
+                    <order-by field-name="createdDate"/>
+                </entity-find>
+
+                <!-- Prepare the isShippingChargesSent field and fetch Return level adjustments with return adjustment type
+                    'RET_SHIPPING_ADJ', RET_SALES_TAX_ADJ' to create ReturnAdjustmentHistory records -->
+
+                <!-- 1. This View is created for the purpose to maintain the Return level Adjustments history which are sent as part of Feed to external systems.
+                     2. The condition on the view is such that it will fetch Return level adjustments which are not sent to external systems.
+                     3. The ReturnAdjustmentHistory record will be created for the Shipping Charges and Shipping Sales Tax.
+                     4. If for a Return some items that are completed later and are eligible to appear in the next feed, then the isShippingChargesSent value will be sent as 'Y'.
+                     5. Based on the value of isShippingChargesSent, the custom transformations can be prepared.
+                     6. This is done so that financials can be done in the right way and order level adjustments are not computed multiple times
+                        which may cause discrepancies in the order totals when reconciliations are done.
+                     7. NOTE: For now only Shipping Charges and Shipping Sales Tax are considered as the Order level
+                        Adjustments for which we are maintaining the history.-->
+
+                <entity-find entity-name="co.hotwax.financial.ReturnAdjustmentAndHistory" list="returnAdjustmentHistoryList">
+                    <econdition field-name="returnId" from="returnHeader.returnId"/>
+                    <econdition field-name="returnItemSeqId" value="_NA_"/>
+                    <econdition field-name="returnAdjustmentTypeId" operator="in" value="RET_SHIPPING_ADJ,RET_SALES_TAX_ADJ"/>
+                </entity-find>
+
+                <!-- If returnAdjustmentHistoryList is empty then isShippingChargesSent will be set as 'Y' else 'N'.
+                     The returnAdjustmentHistoryList can be empty in two cases:
+                     1. No Return level adjustments exists for that returnId.
+                     2. The Return level adjustment were already sent as a part of previous feed
+                        and it's record already exists in the ReturnAdjustmentHistory, hence will not be picked by the ReturnAdjustmentAndHistory view.  -->
+                <set field="isShippingChargesSent" from="returnAdjustmentHistoryList.isEmpty() ? 'Y' : 'N'"/>
+
+                <!-- Prepare the Return Adjustment history -->
+                <iterate list="returnAdjustmentHistoryList" entry="returnAdjustmentHistory">
+                    <service-call name="create#co.hotwax.integration.order.return.ReturnAdjustmentHistory"
+                            in-map="[returnAdjustmentId:returnAdjustmentHistory.returnAdjustmentId,
+                            returnAdjustmentTypeId:returnAdjustmentHistory.returnAdjustmentTypeId,
+                            returnId:returnAdjustmentHistory.returnId, createdDate:nowDate,
+                            comments:'ReturnAdjustment sent as part of Returns Financial Feed']"/>
+                </iterate>
+
+                <!-- Find the Return Items for the return Id from the eligible Returns list -->
+                <entity-find entity-name="co.hotwax.financial.FinancialReturnItemsSyncQueue" list="returnItemList">
+                    <search-form-inputs input-fields-map="customParametersMap" paginate="false"/>
+                    <econdition field-name="returnId" from="returnHeader.returnId"/>
+                    <econdition field-name="statusId" from="statusIds" operator="in"/>
+                    <select-field field-name="returnId,returnItemSeqId,completedDatetime"/>
+                </entity-find>
+
+                <!-- Prepare the returnItemSeqId list -->
+                <set field="returnItemSeqIdList" from="returnItemList*.returnItemSeqId"/>
+
+                <!-- Prepare the Tender Amount for the Return Items -->
+                <service-call name="co.hotwax.ofbiz.FinancialFeedServices.calculate#ReturnsTenderAmount"
+                        in-map="[returnId:returnHeader.returnId, returnItemSeqIdList:returnItemSeqIdList,
+                        statusIds:statusIds]" out-map="tenderAmountOut"/>
+
+                <set field="returnItems" from="[]"/>
+
+                <iterate list="returnItemList" entry="returnItem">
+                    <!-- Fetch the Return Item details from the ReturnItemView -->
+                    <!-- Using entity-find here instead of entity-find-one because there are 3 primary keys for
+                         ReturnItemView - returnId, returnItemSeqId and facilityId and we just want to fetch the records for
+                         unique returnId and returnItemSeqId. -->
+                    <entity-find entity-name="co.hotwax.financial.ReturnItemView" list="returnItemViewList">
+                        <econdition field-name="returnId" from="returnItem.returnId"/>
+                        <econdition field-name="returnItemSeqId" from="returnItem.returnItemSeqId"/>
+                    </entity-find>
+
+                    <set field="returnItemDetail" from="returnItemViewList?.first"/>
+
+                    <if condition="returnItemDetail"><then>
+
+                        <!-- Get the contactMechId from OrderContactMech to fetch the billing details from PostalAddressView  -->
+                        <entity-find entity-name="org.apache.ofbiz.order.order.OrderContactMech" list="billOrderContactMechList">
+                            <econdition field-name="orderId" from="returnItemDetail.orderId"/>
+                            <econdition field-name="contactMechPurposeTypeId" value="BILLING_LOCATION"/>
+                            <order-by field-name="-lastUpdatedStamp"/>
+                        </entity-find>
+
+                        <!-- Get facilityId from OrderItemAndShipGroup using orderId -->
+                        <entity-find entity-name="co.hotwax.order.OrderItemAndShipGroup" list="orderItemShipGroupList">
+                            <econdition field-name="orderId" from="returnItemDetail.orderId"/>
+                            <econdition field-name="orderItemSeqId" from="returnItemDetail.orderItemSeqId"/>
+                        </entity-find>
+
+                        <set field="fulfilledFacilityId" from="orderItemShipGroupList?.first?.facilityId"/>
+
+                        <!-- Fetch the Billing PostalAddress details from PostalAddressView -->
+                        <entity-find-one entity-name="co.hotwax.financial.PostalAddressView" value-field="billToPostalAddress">
+                            <field-map field-name="contactMechId" from="billOrderContactMechList?.first?.contactMechId"/>
+                        </entity-find-one>
+
+                        <!-- If the parameter contains value for facilityGroupIds, then generate a feed specific to that facilityGroupId. -->
+                        <if condition="facilityGroupIds">
+                            <entity-find-count entity-name="org.apache.ofbiz.product.facility.FacilityGroupMember" count-field="facilityGroupMemberCount">
+                                <date-filter/>
+                                <econdition field-name="facilityId" from="returnItemDetail.facilityId"/>
+                                <econdition field-name="facilityGroupId" operator="in" from="facilityGroupIds" ignore-if-empty="true"/>
+                            </entity-find-count>
+                            <if condition="facilityGroupMemberCount == 0"><continue/></if>
+                        </if>
+
+                        <if condition="returnItemDetail?.shipToContactMechId">
+                            <!-- Fetch the Shipping PostalAddress details from PostalAddressView -->
+                            <entity-find-one entity-name="co.hotwax.financial.PostalAddressView" value-field="shipToPostalAddress">
+                                <field-map field-name="contactMechId" from="returnItemDetail?.shipToContactMechId"/>
+                            </entity-find-one>
+                            <!-- Get contactMechId from OrderContactMech if shipToContactMech is missing from ReturnItemDetail -->
+                            <else>
+                                <entity-find entity-name="org.apache.ofbiz.order.order.OrderItemShipGroup" list="orderItemShipGroups">
+                                    <econdition field-name="orderId" from="returnItemDetail?.orderId"/>
+                                </entity-find>
+                                <set field="orderItemShipGroup" from="orderItemShipGroups[0]"/>
+                                <if condition="orderItemShipGroup">
+                                    <entity-find-one entity-name="co.hotwax.financial.PostalAddressView" value-field="shipToPostalAddress">
+                                        <field-map field-name="contactMechId" from="orderItemShipGroup?.contactMechId"/>
+                                    </entity-find-one>
+                                </if>
+                            </else>
+                        </if>
+
+                        <!-- Get all Good Identifications for Product -->
+                        <entity-find entity-name="org.apache.ofbiz.product.product.GoodIdentification" list="goodIdentificationList">
+                            <econdition field-name="productId" from="returnItemDetail.productId"/>
+                            <date-filter/>
+                        </entity-find>
+
+                        <entity-find entity-name="org.apache.ofbiz.product.facility.FacilityGroupMember" list="facilityGroupMemberList">
+                            <date-filter/>
+                            <econdition field-name="facilityId" from="returnItemDetail.facilityId"/>
+                        </entity-find>
+
+                        <!-- Prepare the Return Item Adjustments List -->
+                        <set field="returnItemAdjustmentsList" from="returnAdjustmentList.findAll({returnItemDetail.returnItemSeqId.equals(it.returnItemSeqId)})"/>
+
+                        <!-- Preparing the return item details map -->
+                        <set field="returnItemDetailMap" from="returnItemDetail.getMap() + [completedDatetime:returnItem.completedDatetime, shipTo:shipToPostalAddress, billTo:billToPostalAddress,
+                            productIdentifications:goodIdentificationList, fulfilledFacilityId:fulfilledFacilityId, returnItemAdjustments:returnItemAdjustmentsList, facilityGroupMembers:facilityGroupMemberList]"/>
+                        <script>
+                            returnItems.add(returnItemDetailMap)
+                        </script>
+
+                        <!-- Note - This is done as part of initial implementation approach to create the Feed history records inside the iterate.
+                            TODO Explore how we can take limit while processing records, default can be 1000, it means we are generating feed for 1000 items,
+                            in that way will manage mysql transactions properly. https://git.hotwax.co/HC2/plugins/ofbiz-oms-usl/-/issues/46 -->
+                        <!-- Create record of FinancialReturnHistory to keep logs for the Returns FF -->
+                        <service-call name="create#co.hotwax.integration.financial.FinancialReturnHistory" in-map="[returnId:returnItemDetail.returnId,
+                                returnItemSeqId:returnItemDetail.returnItemSeqId, createdDate:nowDate,
+                                comments:'Return sent as part of Financial Feed CSV']"/>
+                    </then><else>
+                        <log message="Financial Return Sync Queue Item not found in ReturnItemView, not preparing Returns financial feed for returnId ${returnHeader.returnId}"/>
+                        <continue/>
+                    </else></if>
+                </iterate>
+                <!-- Check if the returnItems is not empty to prepare return details.-->
+                <if condition="!returnItems.isEmpty()">
+                <set field="returnMap" from="returnHeader.getMap() + [isShippingChargesSent: isShippingChargesSent,
+                        orderName:returnHeader.orderName, productStoreExternalId: returnHeader.productStoreExternalId,
+                        returnAdjustments:returnAdjustmentsList, customerPartyIdentifications:partyIdentificationList,
+                        tenderAmount:tenderAmountOut.amount, payments:orderPaymentPreferenceList, returnItems:returnItems]"/>
+
+                <script>
+                    new ObjectMapper().setDateFormat(new java.text.SimpleDateFormat(System.getProperty('default_date_time_format')))
+                    .writerWithDefaultPrettyPrinter().writeValue(jGenerator, returnMap)
+                </script>
+                </if>
+            </iterate>
+            <script>
+                        jGenerator.writeEndArray()
+                    }
+                } catch (IOException e) {
+                    logger.error("Error preparing Return Financial Feed files", e)
+                }
+            }
+            </script>
+
+            <!-- Call queue#SystemMessage that will save the json file path in messageText and send the file to sftp
+             using the send service configured in SystemMessageType -->
+            <service-call name="org.moqui.impl.SystemMessageServices.queue#SystemMessage"
+                    in-map="[systemMessageTypeId:systemMessageTypeId, systemMessageRemoteId:systemMessageRemoteId,
+                    messageText:jsonFilePathRef, productStoreId:productStoreId]" out-map="returnFeedSysMsgOut"/>
+
+            <return message="Created the Returns Financial Feed from HotWax at time ${ec.user.nowTimestamp} with type ${systemMessageTypeId} and remote ${systemMessageRemoteId} saved response in messages ${returnFeedSysMsgOut.systemMessageId}"/>
+        </actions>
+    </service>
+</services>

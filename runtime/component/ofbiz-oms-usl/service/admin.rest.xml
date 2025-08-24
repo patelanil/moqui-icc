@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://moqui.org/xsd/rest-api-3.xsd"
+          name="admin" displayName="Commerce Admin REST API" version="${moqui_version}"
+          description="">
+
+    <resource name="login" require-authentication="anonymous-all">
+        <method type="post"><service name="co.hotwax.common.UserServices.login#User"/></method>
+    </resource>
+    <resource name="user">
+        <id name="partyId">
+            <resource name="facilities">
+                <method type="get"><entity name="org.apache.ofbiz.product.facility.FacilityParty" operation="list"/></method>
+            </resource>
+        </id>
+        <resource name="profile">
+            <method type="get"><service name="co.hotwax.common.UserServices.get#UserProfile"/></method>
+        </resource>
+        <resource name="productStore">
+            <!--
+                TODO: Need to get the User's ProductStore, as of now returning all the productStore
+             -->
+            <method type="get"><entity name="org.apache.ofbiz.product.store.ProductStore" operation="list"/></method>
+        </resource>
+        <resource name="getAvailableTimeZones">
+            <method type="get"><service name="co.hotwax.common.CommonServices.get#AvailableTimeZones"/></method>
+        </resource>
+        <resource name="preferences">
+            <method type="get"><entity name="moqui.security.UserPreference" operation="list"/></method>
+            <method type="post"><entity name="moqui.security.UserPreference" operation="create"/></method>
+            <method type="put"><entity name="moqui.security.UserPreference" operation="store"/></method>
+        </resource>
+        <resource name="sessions"><!--Deprecated use admin/user/productStore -->
+            <method type="post"><entity name="co.hotwax.user.UserSession" operation="create"/></method>
+            <method type="get"><entity name="co.hotwax.user.UserSession" operation="list"/></method>
+            <id name="userSessionId">
+                <method type="put"><entity name="co.hotwax.user.UserSession" operation="update"/></method>
+            </id>
+        </resource>
+    </resource>
+    <resource name="organizations">
+        <method type="get"><entity name="org.apache.ofbiz.party.party.PartyRole" operation="list"/></method>
+        <id name="partyId">
+            <method type="get"><entity name="org.apache.ofbiz.party.party.PartyGroup" operation="one"/></method>
+            <method type="post"><entity name="org.apache.ofbiz.party.party.PartyGroup" operation="store"/></method>
+        </id>
+    </resource>
+    <resource name="geos">
+        <method type="get"><entity name="moqui.basic.Geo" operation="list"/></method>
+        <resource  name="assocs">
+            <method type="get"><entity name="moqui.basic.GeoAssoc" operation="list"/></method>
+            <method type="post"><entity name="moqui.basic.GeoAssoc" operation="create"/></method>
+            <method type="put"><entity name="moqui.basic.GeoAssoc" operation="store"/></method>
+        </resource>
+    </resource>
+
+    <resource name="paymentMethodTypes" description="Get the payment method types">
+        <method type="get"><entity name="org.apache.ofbiz.accounting.payment.PaymentMethodType" operation="list"/></method>
+    </resource>
+    <resource name="systemProperties" description="Get the system properties">
+        <method type="get"><entity name="org.apache.ofbiz.common.property.SystemProperty" operation="list"/></method>
+    </resource>
+    <resource name="enumTypes">
+        <method type="get"><entity name="moqui.basic.EnumerationType" operation="list"/></method>
+    </resource>
+    <resource name="enums" description="Get the enumerations">
+        <method type="get"><entity name="co.hotwax.common.enum.EnumerationAndType" operation="list"/></method>
+        <method type="post"><entity name="moqui.basic.Enumeration" operation="create"/></method>
+        <id name="enumId">
+            <method type="put"><entity name="moqui.basic.Enumeration" operation="update"/></method>
+            <method type="delete"><entity name="moqui.basic.Enumeration" operation="delete"/></method>
+        </id>
+    </resource>
+    <resource name="enumGroups" description="Get the enumerations">
+        <id name="enumerationGroupId">
+            <resource name="members">
+                <method type="get"><entity name="co.hotwax.common.enum.EnumerationGroupAndMember" operation="list"/></method>
+                <method type="post"><entity name="co.hotwax.common.enum.EnumerationGroupMember" operation="store"/></method>
+            </resource>
+        </id>
+    </resource>
+    <resource name="integrationTypeMappings">
+        <method type="get"><entity name="co.hotwax.integration.IntegrationTypeMapping" operation="list"/></method>
+        <method type="post"><entity name="co.hotwax.integration.IntegrationTypeMapping" operation="create"/></method>
+        <id name="integrationMappingId">
+            <method type="get"><entity name="co.hotwax.integration.IntegrationTypeMapping" operation="one"/></method>
+            <method type="post"><entity name="co.hotwax.integration.IntegrationTypeMapping" operation="store"/></method>
+            <method type="delete"><entity name="co.hotwax.integration.IntegrationTypeMapping" operation="delete"/></method>
+        </id>
+    </resource>
+
+    <resource name="dataManagerMapping" require-authentication="anonymous-all">
+        <method type="post"><entity name="co.hotwax.datamanager.DataManagerMapping" operation="create"/></method>
+        <id name="mappingPrefId">
+            <method type="delete"><entity name="co.hotwax.datamanager.DataManagerMapping" operation="delete"/></method>
+        </id>
+    </resource>
+
+    <resource name="serviceJobs" description="Service Jobs">
+        <method type="get"><entity name="moqui.service.job.ServiceJobAndProduct" operation="list"/></method>
+        <method type="post"><entity name="moqui.service.job.ServiceJob" operation="create"/></method>
+        <id name="jobName">
+            <method type="get"><service name="co.hotwax.ofbiz.JobServices.get#ServiceJobDetail"/></method>
+            <method type="put"><service name="co.hotwax.ofbiz.JobServices.update#ServiceJob"/></method>
+            <resource name="runNow">
+                <method type="post"><service name="co.hotwax.ofbiz.JobServices.run#ServiceJob"/></method>
+            </resource>
+            <resource name="runs">
+                <method type="get"><entity name="moqui.service.job.ServiceJobRun" operation="list"/></method>
+                <id name="jobRunId">
+                    <method type="get"><entity name="moqui.service.job.ServiceJobRun" operation="one"/></method>
+                </id>
+                <resource name="activeJobRun">
+                    <method type="get">
+                        <entity name="moqui.service.job.ServiceJobRunLock" operation="one"/>
+                    </method>
+                </resource>
+            </resource>
+            <resource name="clone">
+                <method type="post"><service name="co.hotwax.ofbiz.UtilityServices.clone#ServiceJob"/></method>
+            </resource>
+        </id>
+    </resource>
+    <resource name="productStores">
+        <id name="productStoreId">
+            <resource name="facilityGroups">
+                <method type="get"><entity name="co.hotwax.facility.ProductStoreAndFacilityGroup" operation="list"/></method>
+                <id name="facilityGroupId">
+                    <resource name="association">
+                        <method type="post"><entity name="co.hotwax.facility.ProductStoreFacilityGroup" operation="store"/></method>
+                    </resource>
+                </id>
+            </resource>
+            <resource name="facilities">
+                <method type="get"><entity name="co.hotwax.product.store.ProductStoreFacilityDetail" operation="list"/></method>
+                <id name="facilityId">
+                    <resource name="association">
+                        <method type="post"><entity name="org.apache.ofbiz.product.store.ProductStoreFacility" operation="store"/></method>
+                    </resource>
+                </id>
+            </resource>
+            <resource name="shippingMethods">
+                <method type="get"><entity name="co.hotwax.product.store.ProductStoreShipmentMethView" operation="list"/></method>
+            </resource>
+        </id>
+    </resource>
+    <resource name="shopifyShops">
+        <method type="get"><entity name="co.hotwax.shopify.ShopifyShopAndConfig" operation="list"/></method>
+    </resource>
+    <resource name="status" description="Get the status items">
+        <method type="get"><entity name="co.hotwax.common.status.StatusItemAndType" operation="list"/></method>
+    </resource>
+    <resource name="solrFacets">
+        <method type="get"><service name="co.hotwax.search.SearchServices.autoComplete#SolrFacet"/></method>
+    </resource>
+    <resource name="oms">
+        <resource name="healthCheck">
+        <method type="get"><service name="co.hotwax.common.CommonServices.check#OmsConnection"/></method>
+        </resource>
+    </resource>
+    <resource name="facilities" description="Get the facilities">
+        <method type="get"><entity name="co.hotwax.facility.FacilityAndType" operation="list"/></method>
+        <id name="facilityId">
+            <method type="get"><entity name="co.hotwax.facility.FacilityAndType" operation="one"/></method>
+        </id>
+    </resource>
+    <resource name="uploadDataManagerFile">
+        <method type="post">
+            <service name="co.hotwax.common.CommonServices.upload#DataManagerFile"/>
+        </method>
+    </resource>
+</resource>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.2.2">
+
+    <!-- System Message Type for Shopify Inventory Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="HotWaxShopifyInventoryFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Store Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreFulfilledOrderItemsFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Warehouse Brokered Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHBrokeredOrderItemsFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Returns Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsFinancialFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Appeasements Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="AppeasementsFinancialFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Sales Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="SalesFinancialFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- TODO: Discuss and check if some hierarchy can be used for creating System Message Type data like one parent System Message Type
+        that can be used as a template and there can be multiple System Message Types for it. -->
+    <!-- For example the Inventory Delta Feed can be for Store Brokered and Warehouse Brokered so InventoryDeltaFeed can be the parent System Message Type
+        and StoreInventoryDeltaFeed and WarehouseInventoryDeltaFeed can be the child System Message Types-->
+    <!-- System Message Type for Store Brokered Inventory Delta Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreBrokeredInventoryDeltaFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Received Returns Shipment Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsShipmentFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Do Not Have Inventory Item Variance Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="DoNotHaveInventoryVarianceFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Store Cancelled Reservations Inventory Delta Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreCancelledInventoryDeltaFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="FulfilledOrderItemsFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Brokered Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="BrokeredOrderItemsFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Warehouse Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHFulfilledOrderItemsFeed"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+</entity-facade-xml>

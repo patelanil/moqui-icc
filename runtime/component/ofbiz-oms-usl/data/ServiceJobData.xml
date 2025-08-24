@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext">
+    <!-- Handy cron strings: [0 0 2 * * ?] every night at 2:00 am, [0 0/15 * * * ?] every 15 minutes, [0 0/2 * * * ?] every 2 minutes -->
+
+    <!-- TODO The jobs for generating feeds should be like Template type jobs so that it can be used
+            to clone new service jobs as per brands set up on the instances, one way could be to
+            add new enumeration for Service Job Type to identify the Template type jobs,
+            Related ticket on Forum - https://forum.moqui.org/t/how-to-categorize-service-jobs/395
+            Related HC ticket - https://git.hotwax.co/HC2/plugins/ofbiz-oms-usl/-/issues/191 -->
+
+    <!-- Template Service Job to generate the Returns Financial Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsFinancialFeed" jobTypeEnumId="GEN_RTNS_FNCL_FD" instanceOfProductId="GEN_RTNS_FNCL_FD"
+            description="Template Service Job to generate the Returns Financial Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.FinancialFeedServices.generate#ReturnsFinancialFeed"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="returnId"/>
+        <parameters parameterName="facilityGroupIds"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="sinceReturnDate"/>
+        <parameters parameterName="sinceReturnCompletedDate"/>
+        <parameters parameterName="sinceEntryDate"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="returnChannelEnumId"/>
+        <parameters parameterName="customParametersMap"/>
+        <parameters parameterName="statusIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate the Appeasements Financial Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_AppeasementsFinancialFeed" jobTypeEnumId="GEN_APSMNT_FNCL_FD" instanceOfProductId="GEN_APSMNT_FNCL_FD"
+            description="Template Service Job to generate the Appeasements Financial Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.FinancialFeedServices.generate#AppeasementsFinancialFeed"
+            cronExpression="0 0 1 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="returnId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="sinceReturnDate"/>
+        <parameters parameterName="sinceEntryDate"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="facilityGroupIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate the Sales Financial Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_SalesFinancialFeed"
+            description="Template Service Job to generate the Sales Financial Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.FinancialFeedServices.generate#SalesFinancialFeed"
+            cronExpression="0 0 2 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="isPhysical"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate Inventory Feed csv file from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_ShopifyInventoryFeedFromHotWax"
+              description="Template Service Job to generate the Shopify Inventory Feed from HotWax"
+              serviceName="co.hotwax.ofbiz.InventoryServices.generate#ShopifyInventoryFeed"
+              cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="productId"/>
+        <parameters parameterName="facilityGroupId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="jobName" parameterValue="generate_ShopifyInventoryFeedFromHotWax"/>
+        <parameters parameterName="lastRunTime"/>
+        <parameters parameterName="skipLastRunTimeUpdate" parameterValue="false"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate the Brokered Order Items Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_BrokeredOrderItemsFeed" jobTypeEnumId="GEN_BRKR_ORD_ITM_FD" instanceOfProductId="GEN_BRKR_ORD_ITM_FD"
+              description="Template Service Job to generate the Brokered Order Items Feed from HotWax"
+              serviceName="co.hotwax.ofbiz.OrderServices.get#BrokeredOrders"
+              cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="brokeredOrdersCountPerFeed"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="facilityGroupIds"/>
+        <parameters parameterName="parentFacilityTypeIds"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="skipOrderAdjHistoryCreation" parameterValue="false"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate the Fulfilled Order Items Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeed" jobTypeEnumId="GEN_FLFLD_ORD_ITM_FD" instanceOfProductId="GEN_FLFLD_ORD_ITM_FD"
+            description="Template Service Job to generate the Fulfilled Order Items Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.OrderServices.generate#FulfilledOrderItemsFeed"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="parentFacilityTypeIds"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="productTypeIds"/>
+        <parameters parameterName="isPhysical"/>
+        <parameters parameterName="orderStatusId"/>
+        <parameters parameterName="includeSalesChannel"/>
+        <parameters parameterName="excludeSalesChannel"/>
+        <parameters parameterName="customParametersMap"/>
+        <parameters parameterName="orderTypeId"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate Inventory Delta Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_InventoryDeltaFeed"
+            description="Template Service Job to generate the Inventory Delta Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.InventoryServices.generate#InventoryDeltaFeed"
+            cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="jobName" parameterValue="generate_InventoryDeltaFeed"/>
+        <parameters parameterName="inventorySyncLastRunTime"/>
+        <parameters parameterName="skipLastRunTimeUpdate" parameterValue="false"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="eventTypeEnumId"/>
+        <parameters parameterName="facilityTypeId"/>
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate Returns Shipment Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsShipmentFeed"
+            description="Template Service Job to generate the Returns Shipment Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.ShipmentServices.generate#ReturnsShipmentFeed"
+            cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="shipmentId"/>
+        <parameters parameterName="shipmentItemSeqId"/>
+        <parameters parameterName="createdDate"/>
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate Inventory Variance Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_InventoryVarianceFeed" jobTypeEnumId="GEN_INV_VAR_FD" instanceOfProductId="GEN_INV_VAR_FD"
+            description="Template Service Job to generate the Inventory Variance Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.InventoryServices.get#InventoryItemVariance"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="fromDate"/>
+        <parameters parameterName="thruDate"/>
+        <parameters parameterName="reasonEnumIds"/>
+        <parameters parameterName="parentFacilityTypeIds"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="daysBefore"/>
+        <parameters parameterName="jobName" parameterValue="generate_InventoryVarianceFeed"/>
+        <parameters parameterName="lastRunTime"/>
+        <parameters parameterName="skipLastRunTimeUpdate" parameterValue="false"/>
+        <parameters parameterName="customParametersMap"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate Purchase Orders Receipt Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="template_generate_PurchaseOrdersReceiptFeed" jobTypeEnumId="GEN_PO_RCPT_FD" instanceOfProductId="GEN_PO_RCPT_FD"
+            description="Template Service Job to generate the Purchase Orders Shipment Receipt Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.ShipmentServices.generate#PurchaseOrdersReceiptFeed"
+            cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="shipmentTypeId"/>
+        <parameters parameterName="shipmentStatusId"/>
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="sinceReceivedDate"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate Shipments Receipt Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="template_generate_ShipmentsReceiptFeed" jobTypeEnumId="GEN_SHPMNT_RCPT_FD" instanceOfProductId="GEN_SHPMNT_RCPT_FD"
+            description="Template Service Job to generate the Shipments Receipt Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.ShipmentServices.generate#ShipmentsReceiptFeed"
+            cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="shipmentId"/>
+        <parameters parameterName="sinceReceivedDate"/>
+        <parameters parameterName="shipmentTypeId"/>
+        <parameters parameterName="shipmentStatusId"/>
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template Service Job to generate Inventory Cycle Count Variance Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="template_generate_InventoryCycleCountVarianceFeed" jobTypeEnumId="GEN_INV_CYCLE_VAR_FD" instanceOfProductId="GEN_INV_CYCLE_VAR_FD"
+            description="Template Service Job to generate the Inventory Cycle Count Variance Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.InventoryServices.get#InventoryCycleCountVariance"
+            cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="inventoryCountImportId"/>
+        <parameters parameterName="productId"/>
+        <parameters parameterName="statusId"/>
+        <parameters parameterName="inventoryCountItemStatusId"/>
+        <parameters parameterName="fromDate"/>
+        <parameters parameterName="thruDate"/>
+        <parameters parameterName="daysBefore"/>
+        <parameters parameterName="jobName" parameterValue="template_generate_InventoryCycleCountVarianceFeed"/>
+        <parameters parameterName="lastRunTime"/>
+        <parameters parameterName="skipLastRunTimeUpdate" parameterValue="false"/>
+        <parameters parameterName="customParametersMap" value=""/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template service job to generate Fulfilled Order Items Feed for Partial fulfillment-->
+    <moqui.service.job.ServiceJob jobName="generate_TransferOrderFulfilledItemsFeed" jobTypeEnumId="GEN_TO_FLFD_ITM_FD" instanceOfProductId="GEN_TO_FLFD_ITM_FD"
+            description="Template Service Job to generate the Transfer Orders Fulfilled Items Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.OrderServices.generate#TransferOrderFulfilledItemsFeed"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="orderStatusId"/>
+        <parameters parameterName="orderTypeId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="parentFacilityTypeId"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="productTypeIds"/>
+        <parameters parameterName="isPhysical"/>
+        <parameters parameterName="includeSalesChannel"/>
+        <parameters parameterName="excludeSalesChannel"/>
+        <parameters parameterName="customParametersMap"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template service job to generate Fulfilled Order Items Feed for ERP -->
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeedForErp"
+            description="Template Service Job to generate the Fulfilled Order Items Feed from HotWax for ERP"
+            serviceName="co.hotwax.ofbiz.OrderServices.generate#FulfilledOrderItemsFeedForErp"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="parentFacilityTypeIds"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="productTypeIds"/>
+        <parameters parameterName="isPhysical"/>
+        <parameters parameterName="orderStatusId"/>
+        <parameters parameterName="customParametersMap"/>
+        <parameters parameterName="orderTypeId"/>
+        <parameters parameterName="includeSalesChannel"/>
+        <parameters parameterName="excludeSalesChannel"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- Template service job to generate Fulfilled Order Items Feed for Shopify  -->
+
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeedForShopify"
+            description="Template Service Job to generate the Fulfilled Order Items Feed from HotWax for Shopify"
+            serviceName="co.hotwax.ofbiz.OrderServices.generate#FulfilledOrderItemsFeedForShopify"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="parentFacilityTypeIds"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="productTypeIds"/>
+        <parameters parameterName="isPhysical"/>
+        <parameters parameterName="customParametersMap"/>
+        <parameters parameterName="orderTypeId"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.basic.Enumeration enumId="JOB_REJ_ITEM_COUNT"
+                             enumTypeId="INVENTORY_SYS_JOB"
+                             enumCode="JOB_REJ_ITEM_COUNT"
+                             description="Generate Rejected Item Cycle Count"/>
+
+    <moqui.service.job.ServiceJob jobName="approve_rejectedItemsCycleCount"
+                                  jobTypeEnumId="JOB_REJ_ITEM_COUNT" instanceOfProductId="JOB_REJ_ITEM_COUNT"
+                                  description="Template Service Job to approve cycle counts created for rejected items"
+                                  serviceName="co.hotwax.cycleCount.InventoryCountServices.approve#InventoryCountImport"
+                                  paused="Y">
+        <parameters parameterName="countTypeEnumId" parameterValue="REJ_ITEM_COUNT"/>
+        <parameters parameterName="productStoreId" parameterValue=""/>
+    </moqui.service.job.ServiceJob>
+</entity-facade-xml>
+

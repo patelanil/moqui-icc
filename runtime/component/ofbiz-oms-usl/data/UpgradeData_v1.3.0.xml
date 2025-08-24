@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.3.0">
+
+    <!-- System Message Type for Purchase Orders Receipt Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="PurchaseOrdersReceiptFeed"
+            description="Generate HotWax Purchase Orders Receipt Feed"
+            sendPath="/home/${sftpUsername}/hotwax/PurchaseOrdersReceipt/${productStoreId}-PurchaseOrdersReceiptFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- Template Service Job to generate Purchase Orders Receipt Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="template_generate_PurchaseOrdersReceiptFeed"
+            description="Template Service Job to generate the Purchase Orders Shipment Receipt Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.ShipmentServices.generate#PurchaseOrdersReceiptFeed"
+            cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="shipmentTypeId"/>
+        <parameters parameterName="shipmentStatusId"/>
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="sinceReceivedDate"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- System Message Type for Shipments Receipt Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ShipmentsReceiptFeed"
+            description="Generate HotWax Shipments Receipt Feed"
+            sendPath="/home/${sftpUsername}/hotwax/ShipmentsReceiptFeed/${productStoreId}-ShipmentsReceiptFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for Transfer Order Shipments Receipt Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="TransferOrdersReceiptFeed"
+            description="Generate HotWax Transfer Orders Shipment Receipt Feed"
+            sendPath="/home/${sftpUsername}/hotwax/TransferOrdersReceipt/${productStoreId}-TransferOrdersReceiptFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- Template Service Job to generate Shipments Receipt Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="template_generate_ShipmentsReceiptFeed"
+            description="Template Service Job to generate the Shipments Receipt Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.ShipmentServices.generate#ShipmentsReceiptFeed"
+            cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="shipmentId"/>
+        <parameters parameterName="sinceReceivedDate"/>
+        <parameters parameterName="shipmentTypeId"/>
+        <parameters parameterName="shipmentStatusId"/>
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+</entity-facade-xml>

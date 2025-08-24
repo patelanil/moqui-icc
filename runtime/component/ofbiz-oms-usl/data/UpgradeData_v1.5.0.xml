@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.5.0">
+
+    <!-- System Message Type for Shopify Inventory Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="HotWaxShopifyInventoryFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/ShopifyInventoryFeed/${productStoreId}-ShopifyInventoryFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Store Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreFulfilledOrderItemsFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/StoreFulfilledOrderItemsFeed/${productStoreId}-StoreFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Warehouse Brokered Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHBrokeredOrderItemsFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/WHBrokeredOrderItemsFeed/${productStoreId}-WHBrokeredOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Returns Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsFinancialFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/Returns/${productStoreId}-ReturnsFinancialFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Appeasements Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="AppeasementsFinancialFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/Appeasements/${productStoreId}-AppeasementsFinancialFeed-${dateTime}.json"/>
+
+
+    <!-- System Message Type for Sales Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="SalesFinancialFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/Sales/${productStoreId}-HotWaxSalesFinancialFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Store Brokered Inventory Delta Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreBrokeredInventoryDeltaFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/StoreBrokeredInventoryDeltaFeed/${productStoreId}-StoreBrokeredInventoryDeltaFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Received Returns Shipment Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsShipmentFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/ReceivedReturnShipmentsFeed/${productStoreId}-HotWaxReturnsShipmentFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Do Not Have Inventory Item Variance Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="DoNotHaveInventoryVarianceFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/DoNotHaveInventoryVarianceFeed/${productStoreId}-DoNotHaveInventoryVarianceFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Store Cancelled Reservations Inventory Delta Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreCancelledInventoryDeltaFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/StoreCancelledInventoryDeltaFeed/${productStoreId}-StoreCancelledInventoryDeltaFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="FulfilledOrderItemsFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/FulfilledOrderItemsFeed/${productStoreId}-HotWaxFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Brokered Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="BrokeredOrderItemsFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/BrokeredOrderItemsFeed/${productStoreId}-HotWaxBrokeredOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Warehouse Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHFulfilledOrderItemsFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/WHFulfilledOrderItemsFeed/${productStoreId}-WHFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Purchase Orders Receipt Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="PurchaseOrdersReceiptFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/PurchaseOrdersReceiptFeed/${productStoreId}-HotWaxPurchaseOrdersReceiptFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Shipments Receipt Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ShipmentsReceiptFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/ShipmentsReceiptFeed/${productStoreId}-HotWaxShipmentsReceiptFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Transfer Order Shipments Receipt Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="TransferOrdersReceiptFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/TransferOrdersReceiptFeed/${productStoreId}-TransferOrdersReceiptFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Inventory Cycle Count Variance Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InventoryCycleCountVarianceFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/InventoryCycleCountVarianceFeed/${productStoreId}-InventoryCycleCountVarianceFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for In Store Returns Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InStoreReturnsFinancialFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/InStoreReturns/${productStoreId}-InStoreReturnsFinancialFeed-${dateTime}.json"/>
+
+
+    <!-- System Message Type for Ecommerce Returns Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="EcomReturnsFinancialFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/EcomReturns/${productStoreId}-EcomReturnsFinancialFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Ecommerce Store Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="EcomStoreFulfilledOrderItemsFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/EcomStoreFulfilledItemsFeed/${productStoreId}-EcomStoreFulfilledItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for POS Store Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="PosStoreFulfilledOrderItemsFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/PosStoreFulfilledItemsFeed/${productStoreId}-PosStoreFulfilledItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Inventory Item Variance Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InventoryItemVarianceFeed"
+            parentTypeId="LocalFeedFile"
+            receivePath="${contentRoot}/hotwax/InventoryVarianceFeed/${productStoreId}-InventoryItemVarianceFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for FINISHED_GOOD Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="FinishedGoodFulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for FINISHED_GOOD type of Order Items"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/FinishedGoodFulfilledItemsFeed/${productStoreId}-FinishedGoodFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/FinishedGoodFulfilledOrderItemsFeed/${productStoreId}-FinishedGoodFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for DIGITAL_GOOD Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="DigitalGoodFulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for DIGITAL_GOOD type of Order Items"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/DigitalGoodFulfilledItemsFeed/${productStoreId}-DigitalGoodFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/DigitalGoodFulfilledOrderItemsFeed/${productStoreId}-DigitalGoodFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+</entity-facade-xml>

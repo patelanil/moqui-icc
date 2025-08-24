@@ -1,0 +1,75 @@
+diff --git framework/build.gradle framework/build.gradle
+index 739916d8..cea9399f 100644
+--- framework/build.gradle
++++ framework/build.gradle
+@@ -171,6 +171,7 @@ dependencies {
+     implementation 'org.apache.logging.log4j:log4j-api:2.24.3'
+     runtimeOnly 'org.apache.logging.log4j:log4j-jcl:2.24.3'
+     runtimeOnly 'org.apache.logging.log4j:log4j-slf4j2-impl:2.24.3'
++    api 'com.auth0:java-jwt:4.4.0'
+ 
+     // SubEtha SMTP (module as depends on old javax.mail location; also uses SLF4J, activation included elsewhere)
+     api module('org.subethamail:subethasmtp:3.1.7')
+diff --git framework/src/main/groovy/org/moqui/impl/context/UserFacadeImpl.groovy framework/src/main/groovy/org/moqui/impl/context/UserFacadeImpl.groovy
+index 1f4374ca..01d41808 100644
+--- framework/src/main/groovy/org/moqui/impl/context/UserFacadeImpl.groovy
++++ framework/src/main/groovy/org/moqui/impl/context/UserFacadeImpl.groovy
+@@ -13,6 +13,7 @@
+  */
+ package org.moqui.impl.context
+ 
++import co.hotwax.auth.JWTManager
+ import groovy.transform.CompileStatic
+ import org.apache.shiro.authc.AuthenticationToken
+ import org.apache.shiro.authc.ExpiredCredentialsException
+@@ -172,6 +173,14 @@ class UserFacadeImpl implements UserFacade {
+             if (loginKey != null && !loginKey.isEmpty() && !"null".equals(loginKey) && !"undefined".equals(loginKey))
+                 this.loginUserKey(loginKey)
+         }
++        if (currentInfo.username == null &&
++                ((authzHeader && authzHeader.startsWith("Bearer ")) || (eci.webImpl.getRequestParameters() && eci.webImpl.getRequestParameters().get("token")))) {
++            String jwtToken = getHeaderAuthBearerToken(authzHeader) ?: (eci.webImpl.getRequestParameters() ? eci.webImpl.getRequestParameters().get("token"):'');
++            jwtToken = jwtToken.trim()
++            if (jwtToken != null && !jwtToken.isEmpty() && !"null".equals(jwtToken) && !"undefined".equals(jwtToken))
++                this.loginJwtToken(jwtToken, eci)
++        }
++
+         if (currentInfo.username == null && secureParameters.authUsername) {
+             // try the Moqui-specific parameters for instant login
+             // if we have credentials coming in anywhere other than URL parameters, try logging in
+@@ -263,6 +272,14 @@ class UserFacadeImpl implements UserFacade {
+             }
+         }
+     }
++    String getHeaderAuthBearerToken(String authzHeader) {
++        String bearerPrefix = "Bearer ";
++        if (!authzHeader || !authzHeader.startsWith(bearerPrefix)) {
++            return null;
++        }
++        // remove prefix and any leading/trailing spaces and return the bare token
++        return authzHeader.replaceFirst(bearerPrefix, "").trim();
++    }
+     void initFromHandshakeRequest(HandshakeRequest request) {
+         this.session = (HttpSession) request.getHttpSession()
+ 
+@@ -747,6 +764,20 @@ class UserFacadeImpl implements UserFacade {
+         }
+     }
+ 
++    boolean loginJwtToken(String jwtToken, ExecutionContextImpl ec) {
++        Map jwtClaims = JWTManager.validateToken(jwtToken, ec);
++        if (jwtClaims != null && jwtClaims.userLoginId) {
++            String username = (String) jwtClaims.userLoginId;
++            EntityValue userLogin = eci.entity.find("org.apache.ofbiz.security.login.UserLogin").condition("userLoginId", username).disableAuthz().one()
++            if (userLogin != null && "Y".equals(userLogin.getNoCheckSimple("hasLoggedOut"))) {
++                eci.messageFacade.addError(eci.l10n.localize("User ${username} is currently active in this session but has logged out elsewhere, logging pout"))
++                logoutUser();
++            } else {
++                return internalLoginUser(username, false)
++            }
++        }
++        return false;
++    }
+     @Override boolean loginUserKey(String loginKey) {
+         if (!loginKey) {
+             eci.message.addError(eci.l10n.localize("No login key specified"))

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- No copyright or license for configuration file, details here are not considered a creative work. -->
+<moqui-conf xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/moqui-conf-3.xsd">
+
+    <default-property name="datamanager.purge.days" value="30"/>
+    <default-property name="unique.instance.id" value="maarg1"/>
+    <default-property name="solr.url" value="http://localhost:8983"/>
+    <default-property name="scheduled.mdm.check.time" value="60"/>
+    <default-property name="jwt.default.expireTime" value="7200"/>
+
+    <default-property name="default_date_time_format" value="yyyy-MM-dd'T'HH:mm:ssXXX"/>
+    <tools>
+        <tool-factory class="co.hotwax.mdm.DataManagerToolFactory" init-priority="25" disabled="false"/>
+    </tools>
+
+    <cache-list warm-on-start="false">
+        <cache name="jwt.token.key" value-type="String"/>
+    </cache-list>
+    <server-stats visitor-enabled="false" visit-enabled="false"/>
+    <service-facade>
+        <service-type name="oms-rest" runner-class="co.hotwax.impl.service.runner.OmsRestServiceRunner"/>
+    </service-facade>
+    <!-- Set the sequenced-id-prefix to avoid pk conflicts with oms, once all code migrated to moqui and oms sunset, we can remove this prefix -->
+    <entity-facade sequenced-id-prefix="M"/>
+    <screen-facade>
+        <screen location="component://webroot/screen/webroot.xml">
+            <subscreens-item name="maargstatic" menu-include="false" location="component://maarg-util/screen/maargstatic.xml"/>
+        </screen>
+        <screen location="component://oms/screen/Oms.xml">
+            <subscreens-item name="DataManager" menu-title="MDM" menu-index="10" location="component://maarg-util/screen/DataManager.xml"/>
+        </screen>
+    </screen-facade>
+</moqui-conf>

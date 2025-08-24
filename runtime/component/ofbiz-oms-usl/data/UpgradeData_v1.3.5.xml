@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.3.5">
+
+    <!-- System Message Type for Inventory Cycle Count Variance Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InventoryCycleCountVarianceFeed"
+            description="Generate HotWax Inventory Cycle Count Variance Feed"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryCycleCountVariance/${productStoreId}-InventoryCycleCountVarianceFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- Template Service Job to generate Inventory Cycle Count Variance Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="template_generate_InventoryCycleCountVarianceFeed"
+            description="Template Service Job to generate the Inventory Cycle Count Variance Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.InventoryServices.get#InventoryCycleCountVariance"
+            cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="inventoryCountImportId"/>
+        <parameters parameterName="productId"/>
+        <parameters parameterName="statusId"/>
+        <parameters parameterName="fromDate"/>
+        <parameters parameterName="thruDate"/>
+        <parameters parameterName="daysBefore"/>
+        <parameters parameterName="jobName" parameterValue="template_generate_InventoryCycleCountVarianceFeed"/>
+        <parameters parameterName="lastRunTime"/>
+        <parameters parameterName="skipLastRunTimeUpdate" parameterValue="false"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeed">
+        <parameters parameterName="orderStatusId"/>
+        <parameters parameterName="includeSalesChannel"/>
+        <parameters parameterName="excludeSalesChannel"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- System Message Type for Ecommerce Store Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="EcomStoreFulfilledOrderItemsFeed"
+             description="Generate HotWax Store Fulfilled Order Items Feed for Ecommerce Orders"
+             consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+             sendPath="/home/${sftpUsername}/hotwax/EcomStoreFulfilledItemsFeed/${productStoreId}-EcomStoreFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+             sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <!-- System Message Type for POS Store Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="PosStoreFulfilledOrderItemsFeed"
+             description="Generate HotWax Store Fulfilled Order Items Feed for POS Orders"
+             consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+             sendPath="/home/${sftpUsername}/hotwax/PosStoreFulfilledItemsFeed/${productStoreId}-PosStoreFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+             sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+</entity-facade-xml>

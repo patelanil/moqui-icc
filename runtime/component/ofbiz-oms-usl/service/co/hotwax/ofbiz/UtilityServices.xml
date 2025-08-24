@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- TODO: Check to store the parent Service Job reference in the cloned Service Job to know from which Service Job it was created -->
+    <!-- TODO: Discuss if authenticate and transaction-timeout attributes need to be added as for now this service will be run by a logged in user. -->
+    <service verb="clone" noun="ServiceJob">
+        <description>
+            Service to clone existing Service Job.The new Service Job will be created in the Paused state and
+            will have the reference of Service Job it was created from in parentJobName field.
+            All the Service Job Parameters will be copied to the new job, as the default value of copyParameters is set to true.
+        </description>
+        <in-parameters>
+            <parameter name="jobName" required="true">
+                <description>The name of the Service Job to be cloned.</description>
+            </parameter>
+            <parameter name="newJobName" required="true">
+                <description>The name of the new Service Job.</description>
+            </parameter>
+            <parameter name="copyParameters" type="Boolean" default="true">
+                <description>Parameter to check if the Service Job parameters needs to be cloned.</description>
+            </parameter>
+        </in-parameters>
+        <actions>
+            <!-- Check if a Service Job with a newJobName already exists -->
+            <entity-find-one entity-name="moqui.service.job.ServiceJob" value-field="newServiceJob" cache="false">
+                <field-map field-name="jobName" from="newJobName"/>
+            </entity-find-one>
+            <if condition="newServiceJob">
+                <log level="info" message="Not cloning ServiceJob with jobName [${jobName}] to new jobName [${newJobName}], already exists"/>
+                <return/>
+            </if>
+
+            <!-- TODO: Using for-update=true here as for ServiceJob and ServiceJobParameter entities the cache=true in the entity definition
+                and hence value cannot be set for entity find operation's value field or list.
+                Discuss if cache=false can be used in the entity find operation. -->
+            <!-- Fetch the Service Job details using the jobName -->
+            <entity-find-one entity-name="moqui.service.job.ServiceJob" value-field="serviceJob" for-update="true"/>
+            <!-- Set the jobName from the newJobName and set paused to 'Y' -->
+            <!-- NOTE: The new Service Job will always be created in the paused status as some parameters
+                for the new Service Job can be different and needs to be set manually. -->
+            <set field="serviceJob.jobName" from="newJobName"/>
+            <set field="serviceJob.paused" value="Y"/>
+            <set field="serviceJob.parentJobName" from="jobName"/>
+            <entity-create value-field="serviceJob"/>
+            <if condition="copyParameters">
+                <!-- Fetch the Service Job parameters for the job name to be cloned -->
+                <entity-find entity-name="moqui.service.job.ServiceJobParameter" list="serviceJobParamList" for-update="true">
+                    <econdition field-name="jobName"/>
+                </entity-find>
+                <!-- Iterate the list to get Service Job parameter and create the record -->
+                <iterate list="serviceJobParamList" entry="serviceJobParam">
+                    <set field="serviceJobParam.jobName" from="newJobName"/>
+                    <entity-create value-field="serviceJobParam"/>
+                </iterate>
+            </if>
+        </actions>
+    </service>
+</services>

@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+This software is in the public domain under CC0 1.0 Universal plus a 
+Grant of Patent License.
+
+To the extent possible under law, the author(s) have dedicated all
+copyright and related and neighboring rights to this software to the
+public domain worldwide. This software is distributed without any
+warranty.
+
+You should have received a copy of the CC0 Public Domain Dedication
+along with this software (see the LICENSE.md file). If not, see
+<http://creativecommons.org/publicdomain/zero/1.0/>.
+-->
+<screen-extend xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://moqui.org/xsd/xml-screen-3.xsd">
+    <transition name="jobRunDetail"><default-response url="//system/ServiceJob/JobRuns/JobRunDetail"/></transition>
+    <transition name="serviceJobDetail"><default-response url="//system/ServiceJob/Jobs/ServiceJobDetail"/></transition>
+    <transition name="releaseJobLock">
+        <service-call name="co.hotwax.common.CommonServices.release#ServiceJobRunLock"/>
+        <default-response url="." type="url"/>
+    </transition>
+
+    <actions-extend>
+        <set field="maargDockerComponent" from="ec.factory.getComponentInfoList().find { it.name == 'maarg-docker-config' }"/>
+        <set field="componentRelease" value="UpcomingRelease"/>
+        <set field="versionMap" from="maargDockerComponent.versionMap"/>
+        <if condition="versionMap">
+            <if condition="!'HEAD'.equals(versionMap.branch)">
+                <set field="componentRelease" value="${versionMap.branch}"/>
+            <else>
+                <set field="componentRelease" value="${versionMap.tag}"/>
+            </else>
+            </if>
+            <set field="commitSHA" from="versionMap.head"/>
+        </if>
+        <script>
+            def calendar = java.util.Calendar.getInstance()
+            calendar.add(java.util.Calendar.MINUTE, -20)
+            maxLockTimestamp = new java.sql.Timestamp(calendar.getTimeInMillis())
+        </script>
+    </actions-extend>
+    <widgets-extend name="SystemInformation">
+        <container-box id="MaargDashboard"><box-header title="Maarg Information"/>
+            <box-body>
+                <container-row>
+                    <row-col md="6">
+                        <container-row>
+                            <row-col xs="5"><label text="Instance" type="strong"/></row-col>
+                            <row-col xs="7"><label text="${System.getProperty('instance_purpose')}"/></row-col>
+                        </container-row>
+                        <container-row>
+                            <row-col xs="5">
+                                <label condition="!'HEAD'.equals(versionMap?.branch)" text="Branch" type="strong"/>
+                                <label condition="'HEAD'.equals(versionMap?.branch)" text="Tag" type="strong"/>
+                            </row-col>
+                            <row-col xs="7"><label text="${componentRelease}"/></row-col>
+                            <row-col xs="5">
+                            <label condition="commitSHA"  text="Commit SHA" type="strong"/>
+                            </row-col>
+                            <row-col xs="7"><label condition="commitSHA" text="${commitSHA}"/></row-col>
+                        </container-row>
+                    </row-col>
+                    <row-col md="6">
+                        <container-row>
+                            <row-col xs="5"><label text="Instance name" type="strong"/></row-col>
+                            <row-col xs="7"><label text="${System.getProperty('ofbiz.instance.name')}"/></row-col>
+                        </container-row>
+                        <container-row>
+                            <row-col xs="5"><label text="OMS Instance Url" type="strong"/></row-col>
+                            <row-col xs="7">
+                                <link url="${System.getProperty('ofbiz.instance.url')}" text="${System.getProperty('ofbiz.instance.url')}" link-type="anchor"/>
+                            </row-col>
+                        </container-row>
+                    </row-col>
+                </container-row>
+            </box-body>
+        </container-box>
+        <container-box id="RunningJobRun"><box-header title="Running Job Overview"/>
+            <box-body>
+                <form-list name="JobRunList" list="jobRunList">
+                    <entity-find entity-name="moqui.service.job.ServiceJobRunLock" list="jobRunList">
+                        <econdition field-name="jobRunId" operator="is-not-null"/>
+                    </entity-find>
+                    <field name="jobRunId">
+                        <default-field><link url="jobRunDetail" text="${jobRunId}" link-type="anchor"/></default-field></field>
+                    <field name="jobName">
+                        <default-field><link url="serviceJobDetail" text="${jobName}" link-type="anchor"/></default-field>
+                    </field>
+                    <field name="lastRunTime">
+                        <header-field title="Start Time"/>
+                        <default-field><display/></default-field>
+                    </field>
+                    <field name="comments">
+                        <default-field>
+                            <label condition="lastRunTime !=null &amp;&amp; lastRunTime.before(maxLockTimestamp)"  text="This is a long-running job, and it may be locked." />
+                        </default-field>
+                    </field>
+                    <field name="delete">
+                        <default-field title="">
+                            <link condition="lastRunTime !=null &amp;&amp; lastRunTime.before(maxLockTimestamp)" url="releaseJobLock" text="X" confirmation="Are you sure want to release ${jobName} run lock"
+                                  parameter-map="[jobName: jobName, jobRunId: jobRunId]"/>
+                        </default-field>
+                    </field>
+                </form-list>
+            </box-body>
+        </container-box>
+    </widgets-extend>
+</screen-extend>

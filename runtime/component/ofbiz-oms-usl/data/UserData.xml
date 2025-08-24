@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="demo">
+    <moqui.security.UserAccount userId="HOTWAX_USER" username="hotwax.user" userFullName="HotWax User"
+            currentPassword="6c393d0e69cbbb603f71c0672a25dcf5b195897ef94372818e3358e56047bd44"
+            passwordBase64="N" emailAddress="support@hotwax.co"/>
+
+    <moqui.security.UserGroupMember userGroupId="ADMIN" userId="HOTWAX_USER" fromDate="1708695216946"/>
+    <moqui.security.UserGroupMember userGroupId="ADMIN_ADV" userId="HOTWAX_USER" fromDate="1708695216946"/>
+
+</entity-facade-xml>

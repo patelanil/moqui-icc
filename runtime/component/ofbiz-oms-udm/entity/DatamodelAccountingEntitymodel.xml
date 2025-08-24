@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+    <!-- TODO: skipped element title -->
+    <!-- TODO: skipped element version -->
+    <entity entity-name="Invoice" package="org.apache.ofbiz.accounting.invoice">
+        <field name="invoiceId" type="id" is-pk="true"></field>
+        <field name="externalId" type="id-long"><description>This field stores invoice ID of the external system</description></field>
+        <field name="invoiceTypeId" type="id"></field>
+        <field name="partyIdFrom" type="id"></field>
+        <field name="partyId" type="id"></field>
+        <field name="roleTypeId" type="id"></field>
+        <field name="statusId" type="id"></field>
+        <field name="billingAccountId" type="id"></field>
+        <field name="contactMechId" type="id"></field>
+        <field name="invoiceDate" type="date-time"></field>
+        <field name="dueDate" type="date-time"></field>
+        <field name="paidDate" type="date-time"></field>
+        <field name="invoiceMessage" type="text-medium"></field>
+        <field name="referenceNumber" type="text-medium"></field>
+        <field name="description" type="text-medium"></field>
+        <field name="currencyUomId" type="id"></field>
+        <field name="recurrenceInfoId" type="id"></field>
+        <relationship type="one" fk-name="INVOICE_PARTY_FRM" title="From" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="partyIdFrom" related="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVOICE_PARTY" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVOICE_ROLETYP" related="org.apache.ofbiz.party.party.RoleType">
+            <key-map field-name="roleTypeId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.party.party.PartyRole">
+            <key-map field-name="partyId"/>
+            <key-map field-name="roleTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVOICE_STTSITM" related="moqui.basic.StatusItem">
+            <key-map field-name="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVOICE_CMECH" related="org.apache.ofbiz.party.contact.ContactMech">
+            <key-map field-name="contactMechId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVOICE_CUOM" title="Currency" related="moqui.basic.Uom">
+            <key-map field-name="currencyUomId" related="uomId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="InvoiceContactMech" package="org.apache.ofbiz.accounting.invoice" cache="never">
+        <field name="invoiceId" type="id" is-pk="true"></field>
+        <field name="contactMechPurposeTypeId" type="id" is-pk="true"></field>
+        <field name="contactMechId" type="id" is-pk="true"></field>
+        <relationship type="one" fk-name="INVOICE_CMECH_HDR" related="org.apache.ofbiz.accounting.invoice.Invoice">
+            <key-map field-name="invoiceId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVOICE_CMECH_CM" related="org.apache.ofbiz.party.contact.ContactMech">
+            <key-map field-name="contactMechId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVOICE_CMECH_CMPT" related="org.apache.ofbiz.party.contact.ContactMechPurposeType">
+            <key-map field-name="contactMechPurposeTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="InvoiceItem" package="org.apache.ofbiz.accounting.invoice">
+        <field name="invoiceId" type="id" is-pk="true"></field>
+        <field name="invoiceItemSeqId" type="id" is-pk="true"></field>
+        <field name="invoiceItemTypeId" type="id"></field>
+        <field name="overrideGlAccountId" type="id"><description>used to specify the override or actual glAccountId used for the invoice, avoids problems if configuration changes after initial posting, etc</description></field>
+        <field name="overrideOrgPartyId" type="id"><description>Used to specify the organization override rather than using the payToPartyId</description></field>
+        <field name="inventoryItemId" type="id"></field>
+        <field name="productId" type="id"></field>
+        <field name="productFeatureId" type="id"></field>
+        <field name="parentInvoiceId" type="id"></field>
+        <field name="parentInvoiceItemSeqId" type="id"></field>
+        <field name="uomId" type="id"></field>
+        <field name="taxableFlag" type="text-indicator"></field>
+        <field name="quantity" type="number-decimal"></field>
+        <field name="amount" type="currency-precise"></field>
+        <field name="description" type="text-medium"></field>
+        <field name="taxAuthPartyId" type="id"></field>
+        <field name="taxAuthGeoId" type="id"></field>
+        <field name="taxAuthorityRateSeqId" type="id"></field>
+        <field name="salesOpportunityId" type="id"></field>
+        <relationship type="one" fk-name="INVCE_ITM_INVCE" related="org.apache.ofbiz.accounting.invoice.Invoice">
+            <key-map field-name="invoiceId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVCE_ITM_INVITM" related="org.apache.ofbiz.product.inventory.InventoryItem">
+            <key-map field-name="inventoryItemId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVCE_ITM_PROD" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVCE_ITM_PINVIT" related="org.apache.ofbiz.accounting.invoice.InvoiceItem">
+            <key-map field-name="parentInvoiceId" related="invoiceId"/>
+            <key-map field-name="parentInvoiceItemSeqId" related="invoiceItemSeqId"/>
+        </relationship>
+        <relationship type="many" fk-name="INVCE_ITM_CINVIT" title="Children" related="org.apache.ofbiz.accounting.invoice.InvoiceItem">
+            <key-map field-name="invoiceId" related="parentInvoiceId"/>
+            <key-map field-name="invoiceItemSeqId" related="parentInvoiceItemSeqId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVCE_ITM_UOM" related="moqui.basic.Uom">
+            <key-map field-name="uomId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVCE_ITM_TAXPTY" title="TaxAuthority" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="taxAuthPartyId" related="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVCE_ITM_TAXGEO" title="Tax" related="moqui.basic.Geo">
+            <key-map field-name="taxAuthGeoId" related="geoId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVCE_ITM_OVRPTY" title="OverrideOrg" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="overrideOrgPartyId" related="partyId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="InvoiceRole" package="org.apache.ofbiz.accounting.invoice">
+        <field name="invoiceId" type="id" is-pk="true"></field>
+        <field name="partyId" type="id" is-pk="true"></field>
+        <field name="roleTypeId" type="id" is-pk="true"></field>
+        <field name="datetimePerformed" type="date-time"></field>
+        <field name="percentage" type="number-decimal"></field>
+        <relationship type="one" fk-name="INVCE_RLE_INVCE" related="org.apache.ofbiz.accounting.invoice.Invoice">
+            <key-map field-name="invoiceId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVCE_RLE_PARTY" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one-nofk" related="org.apache.ofbiz.party.party.RoleType">
+            <key-map field-name="roleTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="InvoiceStatus" package="org.apache.ofbiz.accounting.invoice">
+        <field name="statusId" type="id" is-pk="true"></field>
+        <field name="invoiceId" type="id" is-pk="true"></field>
+        <field name="statusDate" type="date-time" is-pk="true"></field>
+        <field name="changeByUserLoginId" type="id-long"></field>
+        <relationship type="one" fk-name="INVCE_STS_STSITM" related="moqui.basic.StatusItem">
+            <key-map field-name="statusId"/>
+        </relationship>
+        <relationship type="one" fk-name="INVCE_STS_INVCE" related="org.apache.ofbiz.accounting.invoice.Invoice">
+            <key-map field-name="invoiceId"/>
+        </relationship>
+        <relationship type="one" fk-name="INV_STTS_USRLGN" title="ChangeBy" related="org.apache.ofbiz.security.login.UserLogin">
+            <key-map field-name="changeByUserLoginId" related="userLoginId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductAverageCost" package="org.apache.ofbiz.accounting.ledger">
+<description>Running tally of a product&apos;s average cost in a particular company and facility</description>        <field name="productAverageCostTypeId" type="id" is-pk="true"></field>
+        <field name="organizationPartyId" type="id" is-pk="true"></field>
+        <field name="productId" type="id" is-pk="true"></field>
+        <field name="facilityId" type="id" is-pk="true"></field>
+        <field name="fromDate" type="date-time" is-pk="true"></field>
+        <field name="thruDate" type="date-time"></field>
+        <field name="averageCost" type="number-decimal"></field>
+        <relationship type="one" fk-name="AVG_COST_TYPE" related="org.apache.ofbiz.accounting.ledger.ProductAverageCostType">
+            <key-map field-name="productAverageCostTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="AVG_COST_PARTY" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="organizationPartyId" related="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="AVG_COST_PROD" related="org.apache.ofbiz.product.product.Product">
+            <key-map field-name="productId"/>
+        </relationship>
+        <relationship type="one" fk-name="AVG_COST_FACI" related="org.apache.ofbiz.product.facility.Facility">
+            <key-map field-name="facilityId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="ProductAverageCostType" package="org.apache.ofbiz.accounting.ledger">
+        <field name="productAverageCostTypeId" type="id" is-pk="true"></field>
+        <field name="parentTypeId" type="id"></field>
+        <field name="hasTable" type="text-indicator"></field>
+        <field name="description" type="text-medium"></field>
+        <relationship type="one" fk-name="AVGCOST_TYPE_PAR" title="Parent" related="org.apache.ofbiz.accounting.ledger.ProductAverageCostType">
+            <key-map field-name="parentTypeId" related="productAverageCostTypeId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="GiftCardFulfillment" package="org.apache.ofbiz.accounting.payment">
+        <field name="fulfillmentId" type="id" is-pk="true"></field>
+        <field name="typeEnumId" type="id"></field>
+        <field name="merchantId" type="id-long"></field>
+        <field name="partyId" type="id"></field>
+        <field name="orderId" type="id"></field>
+        <field name="orderItemSeqId" type="id"></field>
+        <field name="surveyResponseId" type="id"></field>
+        <field name="cardNumber" type="text-medium" encrypt="true"></field>
+        <field name="pinNumber" type="text-medium" encrypt="true"></field>
+        <field name="amount" type="currency-amount"></field>
+        <field name="responseCode" type="text-medium"></field>
+        <field name="referenceNum" type="text-medium"></field>
+        <field name="authCode" type="text-medium"></field>
+        <field name="fulfillmentDate" type="date-time"></field>
+        <relationship type="one" fk-name="GC_FILL_ENUM" related="moqui.basic.Enumeration">
+            <key-map field-name="typeEnumId" related="enumId"/>
+        </relationship>
+        <relationship type="one" fk-name="GC_FILL_PARTY" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one" fk-name="GC_FILL_ODRH" related="org.apache.ofbiz.order.order.OrderHeader">
+            <key-map field-name="orderId"/>
+        </relationship>
+        <relationship type="one" fk-name="GC_FILL_ODRI" related="org.apache.ofbiz.order.order.OrderItem">
+            <key-map field-name="orderId"/>
+            <key-map field-name="orderItemSeqId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="PaymentMethod" package="org.apache.ofbiz.accounting.payment">
+        <field name="paymentMethodId" type="id" is-pk="true"></field>
+        <field name="paymentMethodTypeId" type="id"></field>
+        <field name="partyId" type="id"></field>
+        <field name="glAccountId" type="id"></field>
+        <field name="finAccountId" type="id"></field>
+        <field name="description" type="text-medium"></field>
+        <field name="fromDate" type="date-time"></field>
+        <field name="thruDate" type="date-time"></field>
+        <relationship type="one" fk-name="PAYMETH_TYPE" related="org.apache.ofbiz.accounting.payment.PaymentMethodType">
+            <key-map field-name="paymentMethodTypeId"/>
+        </relationship>
+        <relationship type="one" fk-name="PAYMETH_PARTY" related="org.apache.ofbiz.party.party.Party">
+            <key-map field-name="partyId"/>
+        </relationship>
+    </entity>
+    <entity entity-name="PaymentMethodType" package="org.apache.ofbiz.accounting.payment">
+        <field name="paymentMethodTypeId" type="id" is-pk="true"></field>
+        <field name="description" type="text-medium"></field>
+        <field name="defaultGlAccountId" type="id"></field>
+    </entity>
+</entities>
+

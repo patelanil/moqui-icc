@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext">
+
+    <!-- System Message Types for Feed generation  -->
+    <!-- Configuration is added for consumeServiceName and sendPath and sendServiceName for
+         the scenario to put the Feed files to SFTP. From SFTP, the files will be transformed
+         as per custom formats using Apache Nifi. -->
+
+    <!-- NOTE: ${sftpUsername} is used in sendPath for preparing folder path for new SFTP setup -->
+    <!-- This variable is used wrt change done as part of https://github.com/hotwax/moqui-sftp/pull/1/files -->
+
+    <!-- System Message Type for Shopify Inventory Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="HotWaxShopifyInventoryFeed"
+            description="Generate HotWax Shopify Inventory Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/ShopifyInventoryFeed/${productStoreId}-ShopifyInventoryFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/ShopifyInventoryFeed/${productStoreId}-ShopifyInventoryFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Store Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreFulfilledOrderItemsFeed"
+            description="Generate HotWax Store Fulfilled Order Items Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/StoreFulfilledItemsFeed/${productStoreId}-StoreFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/StoreFulfilledOrderItemsFeed/${productStoreId}-StoreFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Warehouse Brokered Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHBrokeredOrderItemsFeed"
+            description="Generate HotWax Warehouse Brokered Order Items Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/WHBrokeredItemsFeed/${productStoreId}-WHBrokeredOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/WHBrokeredOrderItemsFeed/${productStoreId}-WHBrokeredOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Returns Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsFinancialFeed"
+            description="Generate HotWax Returns Financial Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/financial-feed/Returns/${productStoreId}-ReturnsFinancialFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/Returns/${productStoreId}-ReturnsFinancialFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Appeasements Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="AppeasementsFinancialFeed"
+            description="Generate HotWax Appeasements Financial Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/financial-feed/Appeasements/${productStoreId}-AppeasementsFinancialFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/Appeasements/${productStoreId}-AppeasementsFinancialFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Sales Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="SalesFinancialFeed"
+            description="Generate HotWax Sales Financial Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/financial-feed/Sales/${productStoreId}-SalesFinancialFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/Sales/${productStoreId}-HotWaxSalesFinancialFeed-${dateTime}.json"/>
+
+    <!-- TODO: Discuss and check if some hierarchy can be used for creating System Message Type data like one parent System Message Type
+        that can be used as a template and there can be multiple System Message Types for it. -->
+    <!-- For example the Inventory Delta Feed can be for Store Brokered and Warehouse Brokered so InventoryDeltaFeed can be the parent System Message Type
+        and StoreInventoryDeltaFeed and WarehouseInventoryDeltaFeed can be the child System Message Types-->
+    <!-- System Message Type for Store Brokered Inventory Delta Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreBrokeredInventoryDeltaFeed"
+            description="Generate HotWax Store Brokered Inventory Delta Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryDelta/${productStoreId}-StoreBrokeredInventoryDeltaFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/StoreBrokeredInventoryDeltaFeed/${productStoreId}-StoreBrokeredInventoryDeltaFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Received Returns Shipment Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsShipmentFeed"
+            description="Generate HotWax Received Returns Shipment Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/return-shipments/ReceivedShipmentsFeed/${productStoreId}-ReceivedReturnShipmentsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/ReceivedReturnShipmentsFeed/${productStoreId}-HotWaxReturnsShipmentFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Do Not Have Inventory Item Variance Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="DoNotHaveInventoryVarianceFeed"
+            description="Generate HotWax Do Not Have Inventory Variance Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryVariance/${productStoreId}-DoNotHaveInventoryVarianceFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/DoNotHaveInventoryVarianceFeed/${productStoreId}-DoNotHaveInventoryVarianceFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Store Cancelled Reservations Inventory Delta Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreCancelledInventoryDeltaFeed"
+            description="Generate HotWax Store Cancelled Reservations Inventory Delta Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryDelta/${productStoreId}-StoreCancelledInventoryDeltaFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/StoreCancelledInventoryDeltaFeed/${productStoreId}-StoreCancelledInventoryDeltaFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="FulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/FulfilledOrderItems/${productStoreId}-FulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/FulfilledOrderItemsFeed/${productStoreId}-HotWaxFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Brokered Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="BrokeredOrderItemsFeed"
+            description="Generate HotWax Brokered Order Items Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/BrokeredOrderItems/${productStoreId}-BrokeredOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/BrokeredOrderItemsFeed/${productStoreId}-HotWaxBrokeredOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Warehouse Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHFulfilledOrderItemsFeed"
+            description="Generate HotWax Warehouse Fulfilled Order Items Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/WHFulfilledItemsFeed/${productStoreId}-WHFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/WHFulfilledOrderItemsFeed/${productStoreId}-WHFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Purchase Orders Receipt Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="PurchaseOrdersReceiptFeed"
+            description="Generate HotWax Purchase Orders Receipt Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/PurchaseOrdersReceipt/${productStoreId}-PurchaseOrdersReceiptFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/PurchaseOrdersReceiptFeed/${productStoreId}-HotWaxPurchaseOrdersReceiptFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Shipments Receipt Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ShipmentsReceiptFeed"
+            description="Generate HotWax Shipments Receipt Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/ShipmentsReceiptFeed/${productStoreId}-ShipmentsReceiptFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/ShipmentsReceiptFeed/${productStoreId}-HotWaxShipmentsReceiptFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Transfer Order Shipments Receipt Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="TransferOrdersReceiptFeed"
+            description="Generate HotWax Transfer Orders Shipment Receipt Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/TransferOrdersReceipt/${productStoreId}-TransferOrdersReceiptFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/TransferOrdersReceiptFeed/${productStoreId}-TransferOrdersReceiptFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Inventory Cycle Count Variance Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InventoryCycleCountVarianceFeed"
+            description="Generate HotWax Inventory Cycle Count Variance Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryCycleCountVariance/${productStoreId}-InventoryCycleCountVarianceFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/InventoryCycleCountVarianceFeed/${productStoreId}-InventoryCycleCountVarianceFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for In Store Returns Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InStoreReturnsFinancialFeed"
+            description="Generate HotWax Returns Financial Feed for In-Store Returns"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/financial-feed/InStoreReturns/${productStoreId}-InStoreReturnsFinancialFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/InStoreReturns/${productStoreId}-InStoreReturnsFinancialFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Ecommerce Returns Financial Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="EcomReturnsFinancialFeed"
+            description="Generate HotWax Returns Financial Feed for Ecommerce Returns"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/financial-feed/EcomReturns/${productStoreId}-EcomReturnsFinancialFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/FinancialFeed/EcomReturns/${productStoreId}-EcomReturnsFinancialFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Ecommerce Store Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="EcomStoreFulfilledOrderItemsFeed"
+             description="Generate HotWax Store Fulfilled Order Items Feed for Ecommerce Orders"
+             parentTypeId="LocalFeedFile"
+             sendPath="/home/${sftpUsername}/hotwax/EcomStoreFulfilledItemsFeed/${productStoreId}-EcomStoreFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+             sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+             receivePath="${contentRoot}/hotwax/EcomStoreFulfilledItemsFeed/${productStoreId}-EcomStoreFulfilledItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for POS Store Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="PosStoreFulfilledOrderItemsFeed"
+             description="Generate HotWax Store Fulfilled Order Items Feed for POS Orders"
+             parentTypeId="LocalFeedFile"
+             sendPath="/home/${sftpUsername}/hotwax/PosStoreFulfilledItemsFeed/${productStoreId}-PosStoreFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+             sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+             receivePath="${contentRoot}/hotwax/PosStoreFulfilledItemsFeed/${productStoreId}-PosStoreFulfilledItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Inventory Item Variance Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InventoryItemVarianceFeed"
+            description="Generate HotWax Inventory Item Variance Feed"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryItemVarianceFeed/InventoryItemVarianceFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/InventoryVarianceFeed/${productStoreId}-InventoryItemVarianceFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for FINISHED_GOOD Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="FinishedGoodFulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for FINISHED_GOOD type of Order Items"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/FinishedGoodFulfilledItemsFeed/${productStoreId}-FinishedGoodFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/FinishedGoodFulfilledOrderItemsFeed/${productStoreId}-FinishedGoodFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for DIGITAL_GOOD Fulfilled Order Items Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="DigitalGoodFulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for DIGITAL_GOOD type of Order Items"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/DigitalGoodFulfilledItemsFeed/${productStoreId}-DigitalGoodFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/DigitalGoodFulfilledOrderItemsFeed/${productStoreId}-DigitalGoodFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Fulfilled Order Items Feed for Erp  -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ErpFulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for ERP"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/ErpFulfilledOrderItems/${productStoreId}-ErpFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/ErpFulfilledOrderItemsFeed/${productStoreId}-ErpFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Fulfilled Order Items Feed for Transfer Order -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="TransferOrderFulfilledItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for Transfer Orders"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/TransferOrderFulfilledItemsFeed/${productStoreId}-TransferOrderFulfilledItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/TransferOrderFulfilledItemsFeed/${productStoreId}-TransferOrderFulfilledItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for Ecommerce Store Fulfilled Order Items Feed for ERP -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ErpEcomStoreFulfilledOrderItemsFeed"
+            description="Generate HotWax Store Fulfilled Order Items Feed for Ecommerce Orders for ERP"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/ErpEcomStoreFulfilledItemsFeed/${productStoreId}-ErpEcomStoreFulfilledItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/ErpEcomStoreFulfilledItemsFeed/${productStoreId}-ErpEcomStoreFulfilledItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for POS Store Fulfilled Order Items Feed for ERP -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ErpPosStoreFulfilledOrderItemsFeed"
+            description="Generate HotWax Store Fulfilled Order Items Feed for POS Orders for ERP"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/ErpPosStoreFulfilledItemsFeed/${productStoreId}-ErpPosStoreFulfilledItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/ErpPosStoreFulfilledItemsFeed/${productStoreId}-ErpPosStoreFulfilledItemsFeed-${dateTime}.json"/>
+
+    <!-- Sftp server connection details -->
+    <moqui.service.message.SystemMessageRemote systemMessageRemoteId="RemoteSftp"
+            description="SFTP server connection details" sendUrl=""
+            username="" password=""/>
+
+    <!-- Sample Data for System Message Type when using Shop Id to set up Fulfilled Order Items Feed -->
+    <!-- NOTE IMP For this, it is important to update the sendPath and receivePath to include shopId so that
+         the feeds can be identified per Shop and sent to external systems like Shopify accordingly. -->
+<!--    <moqui.service.message.SystemMessageType systemMessageTypeId="FulfilledOrderItemsFeed"
+                description="Generate HotWax Fulfilled Order Items Feed"
+                parentTypeId="LocalFeedFile"
+                sendPath="/home/${sftpUsername}/hotwax/FulfilledOrderItems/${shopId}-${productStoreId}-FulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+                sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+                receivePath="${contentRoot}/hotwax/FulfilledOrderItemsFeed/${shopId}-${productStoreId}-HotWaxFulfilledOrderItemsFeed-${dateTime}.json"/>-->
+</entity-facade-xml>

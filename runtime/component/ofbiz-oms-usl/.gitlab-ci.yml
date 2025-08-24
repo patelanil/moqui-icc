@@ -1,0 +1,93 @@
+stages:
+  - build
+  - release
+
+variables:
+  DOCKER_HOST: $DOCKER_HOST
+  GIT_USERNAME: $GIT_USERNAME
+  GIT_PASSWORD: $GIT_PASSWORD
+  REPOSITORY_URL: $REPOSITORY_URL
+  MANUAL_TRIGGER: $MANUAL_TRIGGER 
+  CI_COMMIT_TAG:
+      description: 'Tag Name'
+
+build_job:
+  image:
+    name: amazon/aws-cli
+    entrypoint: [""]
+
+  services:
+    - docker:18.09-dind
+
+  before_script:
+    - amazon-linux-extras install docker
+    - aws --version
+    - docker --version
+
+  stage: build
+  
+  allow_failure: false
+
+  rules:
+    - if: $CI_COMMIT_TAG =~/^v.*/   
+    - if: $MANUAL_TRIGGER == "true"
+      when: manual
+
+  script:
+    - echo $MANUAL_TRIGGER
+    - echo $CI_PROJECT_ID + $CI_COMMIT_TAG + $CI_API_V4_URL
+    - CLEANED_TAG=$(echo $CI_COMMIT_TAG | sed 's/^v//')
+  
+    #Install jq to fetch change log, installing epel to as sudo is not present in aws/linux
+    - amazon-linux-extras install epel
+    - yum install -y jq
+
+    # Fetch Changelog
+    - 'curl -H "PRIVATE-TOKEN: $CI_API_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/changelog?version=$CLEANED_TAG" | jq -r .notes > release_notes.md'
+
+    # Login to ECR
+    #- aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REPOSITORY_URL
+
+    #- echo "Building Docker image... $DOCKER_IMAGE_NAME"
+    #- docker build --force-rm=true --no-cache=true --build-arg GIT_USERNAME=$GIT_USERNAME --build-arg GIT_PASSWORD=$GIT_PASSWORD -t $REPOSITORY_URL:$CI_COMMIT_TAG . -f docker-auto/Dockerfile
+    
+    #- echo "Pushing Docker Image . . ."
+    #- aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REPOSITORY_URL
+    #- docker push $REPOSITORY_URL:$CI_COMMIT_TAG
+    #- docker rmi $REPOSITORY_URL:$CI_COMMIT_TAG
+    
+  artifacts:
+
+    paths:
+    - release_notes.md
+    - echo release_notes.md
+
+  retry: 2
+
+release_job:
+
+  stage: release
+
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+
+  needs:
+    - job: build_job
+      artifacts: true
+
+  rules:
+    - if: $CI_COMMIT_TAG =~/^v.*/                    
+
+  script:
+    - echo "running release_job"
+    - CLEANED_TAG=$(echo $CI_COMMIT_TAG | sed 's/^v//')
+    - echo "Cleaned tag $CLEANED_TAG"
+    - RELEASE_DATE=$(date +%F)
+    - release-cli create --name "${CLEANED_TAG}" --description release_notes.md --tag-name "${CI_COMMIT_TAG}" 
+
+  artifacts:
+    paths:
+    - release_notes.md
+
+  when: always
+
+  retry: 2

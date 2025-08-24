@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+-->
+
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="Find Import" default-menu-index="1">
+
+    <transition name="ImportParameter">
+        <default-response url="../ImportParameters"/>
+    </transition>
+    <transition name="dataManagerConfig"><default-response url="../../DataManagerConfig/DataManagerConfigView"/></transition>
+    <transition name="downloadContent" read-only="true">
+        <parameter name="logContentId"/>
+        <actions><entity-find-one entity-name="co.hotwax.datamanager.DataManagerContent" value-field="logContent"/>
+            <script>ec.web.sendResourceResponse(logContent?.contentLocation)</script></actions>
+        <default-response type="none"/>
+    </transition>
+    <actions>
+        <script>
+            import co.hotwax.mdm.ScheduledDataManagerRunner;
+            ScheduledDataManagerRunner mdmRunner = ec.factory.getTool("MDM", ScheduledDataManagerRunner)
+            mdmPriorityWorkerPool = null;
+            mdmNormalWorkerPool = null;
+            lastExecuteTime = null;
+            if (mdmRunner != null ) {
+                mdmPriorityWorkerPool = mdmRunner.getPool('PRIORITY');
+                mdmNormalWorkerPool = mdmRunner.getPool('NORMAL');
+                lastExecuteTime = Instant.ofEpochMilli(mdmRunner.getLastExecuteTime()).atZone(ec.user.getTimeZone().toZoneId())
+                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss (VV)"))
+
+            }
+        </script>
+    </actions>
+    <widgets>
+        <container-box id="SchedulerDashboard">
+            <box-header title="MDM Runner"/>
+            <box-body>
+                <container-row>
+                    <row-col md="4">
+                        <label text="Priority Pool" type="strong"/>
+                        <container-row><row-col xs="1"/><row-col xs="4"><label text="Threads" type="strong"/></row-col>
+                            <row-col xs="7">
+                                <label condition="mdmPriorityWorkerPool" text="Active: ${mdmPriorityWorkerPool.getActiveCount()} Cur: ${mdmPriorityWorkerPool.getPoolSize()} Max: ${mdmPriorityWorkerPool.getMaximumPoolSize()}"
+                                       style="${mdmPriorityWorkerPool.getActiveCount() == mdmPriorityWorkerPool.getMaximumPoolSize() ? 'text-warning' : ''}"/></row-col></container-row>
+                        <container-row><row-col xs="1"/><row-col xs="4"><label text="Queue" type="strong"/></row-col>
+                            <row-col xs="7"><label condition="mdmPriorityWorkerPool" text="Cur: ${mdmPriorityWorkerPool.queue.size()} Rem: ${mdmPriorityWorkerPool.queue.remainingCapacity()}"
+                                                   style="${mdmPriorityWorkerPool.queue.remainingCapacity() == 0 ? 'text-danger' : (mdmPriorityWorkerPool.queue.size() &gt; mdmPriorityWorkerPool.queue.remainingCapacity() ? 'text-warning' : '')}"/></row-col></container-row>
+                    </row-col>
+                    <row-col md="4">
+                        <label text="Normal Pool" type="strong"/>
+                        <container-row><row-col xs="1"/><row-col xs="4"><label text="Threads" type="strong"/></row-col>
+                            <row-col xs="7">
+                                <label condition="mdmNormalWorkerPool" text="Active: ${mdmNormalWorkerPool.getActiveCount()} Cur: ${mdmNormalWorkerPool.getPoolSize()} Max: ${mdmNormalWorkerPool.getMaximumPoolSize()}"
+                                       style="${mdmNormalWorkerPool.getActiveCount() == mdmNormalWorkerPool.getMaximumPoolSize() ? 'text-warning' : ''}"/></row-col></container-row>
+                        <container-row><row-col xs="1"/><row-col xs="4"><label text="Queue" type="strong"/></row-col>
+                            <row-col xs="7"><label condition="mdmNormalWorkerPool" text="Cur: ${mdmNormalWorkerPool.queue.size()} Rem: ${mdmNormalWorkerPool.queue.remainingCapacity()}"
+                                                   style="${mdmNormalWorkerPool.queue.remainingCapacity() == 0 ? 'text-danger' : (mdmNormalWorkerPool.queue.size() &gt; mdmNormalWorkerPool.queue.remainingCapacity() ? 'text-warning' : '')}"/></row-col></container-row>
+                    </row-col>
+                    <row-col md="4">
+                        <label condition="lastExecuteTime != null" text="Last import runner executed at: &lt;strong&gt;${lastExecuteTime} " encode="false"/>
+                    </row-col>
+                </container-row>
+            </box-body>
+        </container-box>
+        <form-list name="DataManagerImportList" list="dataManagerImports" skip-form="true" show-page-size="true"  header-dialog="true">
+            <entity-find entity-name="co.hotwax.datamanager.DataManagerLog" list="dataManagerImports">
+                <search-form-inputs default-order-by="createdDate desc"/>
+                <econdition field-name="logTypeEnumId" value="DmltImport"/>
+            </entity-find>
+            <row-actions>
+                <entity-find entity-name="co.hotwax.datamanager.DataManagerContent" list="dmContents">
+                    <econdition field-name="logId" from="logId"/>
+                    <order-by field-name="-contentDate"/>
+                </entity-find>
+                <filter-map-list list="dmContents" to-list="uploadedContents">
+                    <field-map field-name="logContentTypeEnumId" value="DmcntImported"/>
+                </filter-map-list>
+                <filter-map-list list="dmContents" to-list="errorContents">
+                    <field-map field-name="logContentTypeEnumId" value="DmcntError"/>
+                </filter-map-list>
+                <set field="uploadedContent" from="uploadedContents?uploadedContents[0]:null"/>
+                <set field="errorContent" from="errorContents?errorContents[0]:null"/>
+                <script>
+                    uploadedFileSize = uploadedContent?.fileSize ? (uploadedContent.fileSize / (1024 * 1024)).toBigDecimal().setScale(3, BigDecimal.ROUND_HALF_UP) : null
+                    errorFileSize = errorContent?.fileSize   ? (errorContent.fileSize   / (1024 * 1024)).toBigDecimal().setScale(3, BigDecimal.ROUND_HALF_UP) : null
+
+                    totalRecord = co.hotwax.util.MaargUtil.getCompactNumber(totalRecordCount, ec.user.locale)
+                    failedRecord = co.hotwax.util.MaargUtil.getCompactNumber(failedRecordCount, ec.user.locale)
+                </script>
+            </row-actions>
+            <field name="logId">
+                <header-field show-order-by="case-insensitive"><text-find size="20"/></header-field>
+                <default-field>
+                    <display/>
+                </default-field>
+            </field>
+            <field name="parentLogId">
+                <conditional-field condition="parentLogId">
+                    <label tooltip="Parent" text="${parentLogId}" type="small"/>
+                </conditional-field>
+                <default-field title="" tooltip="Parent">
+                </default-field></field>
+            <field name="configId">
+                <header-field show-order-by="case-insensitive"><text-find size="20"/></header-field>
+                <default-field><link text="${configId}" url="dataManagerConfig" link-type="anchor" target-window="_blank" icon="fa fa-external-link"/></default-field>
+            </field>
+            <field name="uploadedFile">
+                <default-field title="Uploaded File" tooltip="Uploaded File">
+                    <link url="downloadContent" link-type="anchor" text="" icon="fa fa-download"
+                          parameter-map="[configId: configId, logContentId:uploadedContent.logContentId]" tooltip="${uploadedContent?.fileName}" condition="uploadedContent"/>
+                    <label text="${uploadedFileSize} MB" type="p" condition="uploadedFileSize"/>
+                </default-field>
+            </field>
+            <field name="importParameter">
+                <default-field>
+                    <dynamic-dialog id="ImportParameter" button-text="View" title="Parameters for import [${logId}]" transition="ImportParameter" parameter-map="[logId:logId]" button-style=""/>
+                </default-field>
+            </field>
+            <field name="errorFile">
+                <default-field title="Error File" tooltip="Error File">
+                    <link url="downloadContent" link-type="anchor" text="" icon="fa fa-download"
+                          parameter-map="[configId: configId, logContentId:errorContent.logContentId]" tooltip="${errorContent?.fileName}" condition="errorContent"/>
+                    <label text="${errorFileSize}MB" type="p" condition="errorFileSize"/>
+                </default-field>
+            </field>
+            <field name="createdByUserLogin">
+                <default-field title="" tooltip="Created By"><display-entity entity-name="moqui.security.UserAccount" key-field-name="username" text="${userFullName}"/></default-field>
+            </field>
+            <field name="createdDate">
+                <header-field show-order-by="true"><date-find/></header-field>
+                <default-field><display format="yyyy-MM-dd HH:mm:ss"/></default-field>
+            </field>
+            <field name="startDateTime">
+                <header-field show-order-by="case-insensitive"><date-find/></header-field>
+                <default-field><display format="yyyy-MM-dd HH:mm:ss"/></default-field>
+            </field>
+            <field name="completionDateTime">
+                <conditional-field condition="statusId == 'DmlsCancelled' || statusId == 'DmlsCrashed'" tooltip="Cancelled Date" title="">
+                    <display text="${cancelDateTime}" format="yyyy-MM-dd HH:mm:ss"/>
+                </conditional-field>
+                <conditional-field condition="statusId == 'DmlsFinished'" tooltip="Finished Date" title="">
+                    <display text="${finishDateTime}" format="yyyy-MM-dd HH:mm:ss"/>
+                </conditional-field>
+            </field>
+            <field name="cancelDateTime">
+                <header-field><date-find/></header-field>
+                <default-field><hidden/></default-field>
+            </field>
+            <field name="finishDateTime">
+                <header-field><date-find/></header-field>
+                <default-field><hidden/></default-field>
+            </field>
+            <field name="statusId">
+                <header-field>
+                    <drop-down allow-empty="true">
+                        <entity-options>
+                            <entity-find entity-name="moqui.basic.StatusItem" cache="true">
+                                <econdition field-name="statusTypeId" value="DataManagerLog"/>
+                                <order-by field-name="-description"/>
+                            </entity-find>
+                        </entity-options>
+                    </drop-down>
+                </header-field>
+                <default-field><display-entity entity-name="moqui.basic.StatusItem"/></default-field>
+            </field>
+            <field name="productStoreId">
+                <header-field>
+                    <drop-down allow-empty="true">
+                        <entity-options text="${storeName} [${productStoreId}]">
+                            <entity-find entity-name="org.apache.ofbiz.product.store.ProductStore" cache="true"/>
+                        </entity-options>
+                    </drop-down>
+                </header-field>
+                <default-field title="Product Store"><display-entity entity-name="org.apache.ofbiz.product.store.ProductStore" text="${storeName}"/></default-field>
+            </field>
+            <field name="totalRecordCount">
+                <header-field show-order-by="true"/>
+                <default-field title="Total Record" tooltip="Total Record ${totalRecordCount?:0}">
+                    <display text="${totalRecord?:0}"/>
+                </default-field>
+            </field>
+            <field name="failedRecordCount">
+                <header-field show-order-by="true"/>
+                <default-field title="Failed Record" tooltip="Failed Record ${failedRecordCount?:0}" container-style="text-danger">
+                    <display text="${failedRecord?:0}"/>
+                </default-field>
+            </field>
+            <field name="executionTime">
+                <conditional-field condition="startDateTime &amp;&amp; finishDateTime">
+                    <display text="${(groovy.time.TimeCategory.minus(finishDateTime, startDateTime))}" format=""/>
+                </conditional-field>
+                <conditional-field condition="startDateTime &amp;&amp; cancelDateTime">
+                    <display text="${(groovy.time.TimeCategory.minus(cancelDateTime, startDateTime))}"/>
+                </conditional-field>
+            </field>
+            <field name="findButton">
+            <header-field title="Find"><submit/></header-field>
+                <default-field title="">
+                </default-field>
+            </field>
+            <form-list-column>
+                <field-ref name="logId"/>
+                <field-ref name="parentLogId"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="configId"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="uploadedFile"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="importParameter"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="errorFile"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="createdDate"/>
+                <field-ref name="createdByUserLogin"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="startDateTime"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="statusId"/>
+                <field-ref name="completionDateTime"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="productStoreId"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="totalRecordCount"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="failedRecordCount"/>
+            </form-list-column>
+            <form-list-column>
+                <field-ref name="executionTime"/>
+            </form-list-column>
+        </form-list>
+    </widgets>
+</screen>

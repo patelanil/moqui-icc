@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.4.0">
+
+    <!-- System Message Type for Inventory Item Variance Feed -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="InventoryItemVarianceFeed"
+            description="Generate HotWax Inventory Item Variance Feed"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryItemVarianceFeed/${productStoreId}-InventoryItemVarianceFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"/>
+
+    <moqui.service.job.ServiceJob jobName="generate_InventoryVarianceFeed"
+            serviceName="co.hotwax.ofbiz.InventoryServices.get#InventoryItemVariance">
+        <parameters parameterName="varianceReasonIds"/>
+        <parameters parameterName="parentFacilityTypeIds"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="jobName" parameterValue="generate_InventoryVarianceFeed"/>
+        <parameters parameterName="lastRunTime"/>
+        <parameters parameterName="skipLastRunTimeUpdate" parameterValue="false"/>
+    </moqui.service.job.ServiceJob>
+</entity-facade-xml>

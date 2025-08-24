@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.1.0">
+
+    <!-- System Message Type data -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="HotWaxShopifyInventoryFeed"
+            sendPath="/home/${sftpUsername}/hotwax/ShopifyInventoryFeed/${productStoreId}-ShopifyInventoryFeed-${systemMessageId}-${dateTime}.json"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsFinancialFeed"
+            description="Generate HotWax Returns Financial Feed"
+            sendPath="/home/${sftpUsername}/hotwax/financial-feed/Returns/${productStoreId}-ReturnsFinancialFeed-${systemMessageId}-${dateTime}.json"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="AppeasementsFinancialFeed"
+            sendPath="/home/${sftpUsername}/hotwax/financial-feed/Appeasements/${productStoreId}-AppeasementsFinancialFeed-${systemMessageId}-${dateTime}.json"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="SalesFinancialFeed"
+            sendPath="/home/${sftpUsername}/hotwax/financial-feed/Sales/${productStoreId}-SalesFinancialFeed-${systemMessageId}-${dateTime}.json"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ReturnsShipmentFeed"
+            description="Generate HotWax Received Returns Shipment Feed"
+            sendPath="/home/${sftpUsername}/hotwax/return-shipments/ReceivedShipmentsFeed/${productStoreId}-ReceivedReturnShipmentsFeed-${systemMessageId}-${dateTime}.json"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="WHBrokeredOrderItemsFeed"
+            description="Generate HotWax Warehouse Brokered Order Items Feed"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/${sftpUsername}/hotwax/BrokeredOrderItems/${productStoreId}-WHBrokeredOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="org.moqui.sftp.SftpMessageServices.send#SystemMessageSftp"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="DoNotHaveInventoryVarianceFeed"
+            description="Generate HotWax Do Not Have Inventory Variance Feed"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryVariance/${productStoreId}-DoNotHaveInventoryVarianceFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="org.moqui.sftp.SftpMessageServices.send#SystemMessageSftp"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreFulfilledOrderItemsFeed"
+            description="Generate HotWax Store Fulfilled Order Items Feed"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/${sftpUsername}/hotwax/FulfilledOrderItems/${productStoreId}-StoreFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="org.moqui.sftp.SftpMessageServices.send#SystemMessageSftp"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreBrokeredInventoryDeltaFeed"
+            description="Generate HotWax Store Brokered Inventory Delta Feed"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryDelta/${productStoreId}-StoreBrokeredInventoryDeltaFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="org.moqui.sftp.SftpMessageServices.send#SystemMessageSftp"/>
+
+    <moqui.service.message.SystemMessageType systemMessageTypeId="StoreCancelledInventoryDeltaFeed"
+            description="Generate HotWax Store Cancelled Reservations Inventory Delta Feed"
+            consumeServiceName="co.hotwax.ofbiz.SystemMessageServices.consume#HotWaxFeedSystemMessage"
+            sendPath="/home/${sftpUsername}/hotwax/InventoryDelta/${productStoreId}-StoreCancelledInventoryDeltaFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="org.moqui.sftp.SftpMessageServices.send#SystemMessageSftp"/>
+
+    <!-- Service Job data -->
+    <moqui.service.job.ServiceJob jobName="generate_ShopifyInventoryFeedFromHotWax"
+            description="Template Service Job to generate the Shopify Inventory Feed from HotWax">
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsFinancialFeed"
+            description="Template Service Job to generate the Returns Financial Feed from HotWax">
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_AppeasementsFinancialFeed"
+            description="Template Service Job to generate the Appeasements Financial Feed from HotWax">
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_SalesFinancialFeed"
+            description="Template Service Job to generate the Sales Financial Feed from HotWax">
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsShipmentFeed"
+            description="Template Service Job to generate the Returns Shipment Feed from HotWax">
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_BrokeredOrderItemsFeed"
+            description="Template Service Job to generate the Brokered Order Items Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.OrderServices.generate#BrokeredOrderItemsFeed"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="parentFacilityTypeId"/>
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_InventoryVarianceFeed"
+            description="Template Service Job to generate the Inventory Variance Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.InventoryServices.generate#InventoryItemVarianceFeed"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="fromDate"/>
+        <parameters parameterName="thruDate"/>
+        <parameters parameterName="varianceReasonId"/>
+        <parameters parameterName="parentFacilityTypeId"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="daysBefore"/>
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeed"
+            description="Template Service Job to generate the Fulfilled Order Items Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.OrderServices.generate#FulfilledOrderItemsFeed"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="parentFacilityTypeId"/>
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="generate_InventoryDeltaFeed"
+            description="Template Service Job to generate the Inventory Delta Feed from HotWax"
+            serviceName="co.hotwax.ofbiz.InventoryServices.generate#InventoryDeltaFeed"
+            cronExpression="0 0 * * * ?" paused="Y">
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="jobName" parameterValue="generate_InventoryDeltaFeed"/>
+        <parameters parameterName="inventorySyncLastRunTime"/>
+        <parameters parameterName="skipLastRunTimeUpdate" parameterValue="false"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="eventTypeEnumId"/>
+        <parameters parameterName="facilityTypeId"/>
+        <parameters parameterName="productStoreIds"/>
+    </moqui.service.job.ServiceJob>
+</entity-facade-xml>

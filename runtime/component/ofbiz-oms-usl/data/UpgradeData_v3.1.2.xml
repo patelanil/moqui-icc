@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade">
+
+    <!-- Enumeration Types for Service Jobs -->
+    <moqui.basic.EnumerationType enumTypeId="FULFILLMENT_SYS_JOB" description="Fulfillment Jobs"/>
+    <moqui.basic.EnumerationType enumTypeId="INVENTORY_SYS_JOB" description="Inventory Jobs"/>
+    <moqui.basic.EnumerationType enumTypeId="MISC_SYS_JOB" description="Miscellaneous Jobs"/>
+    <moqui.basic.EnumerationType enumTypeId="ORDER_SYS_JOB" description="Order Jobs"/>
+    <moqui.basic.EnumerationType enumTypeId="PRE_ORD_SYS_JOB" description="Preorder/Backorder Jobs"/>
+
+    <!-- Enumeration Types for Service Jobs -->
+    <moqui.basic.Enumeration enumId="GEN_PO_RCPT_FD" enumCode="GEN_PO_RCPT_FD" description="Generate Purchase Orders Shipment Receipt Feed" enumTypeId="PRE_ORD_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="GEN_SHPMNT_RCPT_FD" enumCode="GEN_SHPMNT_RCPT_FD" description="Generate Shipments Receipt Feed" enumTypeId="INVENTORY_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="GEN_INV_VAR_FD" enumCode="GEN_INV_VAR_FD" description="Generate Inventory Variance Feed" enumTypeId="INVENTORY_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="GEN_INV_CYCLE_VAR_FD" enumCode="GEN_INV_CYCLE_VAR_FD" description="Generate Inventory Cycle Count Variance Feed" enumTypeId="INVENTORY_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="GEN_FLFLD_ORD_ITM_FD" enumCode="GEN_FLFLD_ORD_ITM_FD" description="Generate Fulfilled Order Items Feed" enumTypeId="FULFILLMENT_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="GEN_BRKR_ORD_ITM_FD" enumCode="GEN_BRKR_ORD_ITM_FD" description="Generate Brokered Order Items Feed" enumTypeId="ORDER_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="GEN_APSMNT_FNCL_FD" enumCode="GEN_APSMNT_FNCL_FD" description="Generate Appeasements Financial Feed" enumTypeId="ORDER_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="GEN_RTNS_FNCL_FD" enumCode="GEN_RTNS_FNCL_FD" description="Generate Returns Financial Feed" enumTypeId="ORDER_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="GEN_TO_FLFD_ITM_FD" enumCode="GEN_TO_FLFD_ITM_FD" description="Generate TO Fulfilled Items Feed" enumTypeId="FULFILLMENT_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="CNSM_RCVD_SYS_MSG" enumCode="CNSM_RCVD_SYS_MSG" description="Consume All Received System Messages" enumTypeId="MISC_SYS_JOB"/>
+    <moqui.basic.Enumeration enumId="SND_PRDCD_SYS_MSG" enumCode="SND_PRDCD_SYS_MSG" description="Send All Produced System Messages" enumTypeId="MISC_SYS_JOB"/>
+
+    <!-- Update Service Jobs with jobTypeEnumIds -->
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeed" jobTypeEnumId="GEN_FLFLD_ORD_ITM_FD"/>
+    <moqui.service.job.ServiceJob jobName="generate_TransferOrderFulfilledItemsFeed" jobTypeEnumId="GEN_TO_FLFD_ITM_FD"/>
+    <moqui.service.job.ServiceJob jobName="template_generate_ShipmentsReceiptFeed" jobTypeEnumId="GEN_SHPMNT_RCPT_FD"/>
+    <moqui.service.job.ServiceJob jobName="generate_InventoryVarianceFeed" jobTypeEnumId="GEN_INV_VAR_FD"/>
+    <moqui.service.job.ServiceJob jobName="template_generate_InventoryCycleCountVarianceFeed" jobTypeEnumId="GEN_INV_CYCLE_VAR_FD"/>
+    <moqui.service.job.ServiceJob jobName="send_AllProducedSystemMessages_frequent" jobTypeEnumId="SND_PRDCD_SYS_MSG"/>
+    <moqui.service.job.ServiceJob jobName="consume_AllReceivedSystemMessages_frequent" jobTypeEnumId="CNSM_RCVD_SYS_MSG"/>
+    <moqui.service.job.ServiceJob jobName="generate_BrokeredOrderItemsFeed" jobTypeEnumId="GEN_BRKR_ORD_ITM_FD"/>
+    <moqui.service.job.ServiceJob jobName="generate_AppeasementsFinancialFeed" jobTypeEnumId="GEN_APSMNT_FNCL_FD"/>
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsFinancialFeed" jobTypeEnumId="GEN_RTNS_FNCL_FD"/>
+    <moqui.service.job.ServiceJob jobName="template_generate_PurchaseOrdersReceiptFeed" jobTypeEnumId="GEN_PO_RCPT_FD"/>
+
+    <!-- Template Service Job to generate Inventory Variance Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="generate_InventoryVarianceFeed">
+        <parameters parameterName="reasonEnumIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <moqui.service.job.ServiceJob jobName="template_generate_InventoryCycleCountVarianceFeed">
+        <parameters parameterName="customParametersMap" value=""/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- rejected item cycle count service job data -->
+
+    <moqui.basic.Enumeration enumId="JOB_REJ_ITEM_COUNT"
+                             enumTypeId="INVENTORY_SYS_JOB"
+                             enumCode="JOB_REJ_ITEM_COUNT"
+                             description="Generate Rejected Item Cycle Count"/>
+
+    <moqui.service.job.ServiceJob jobName="approve_rejectedItemsCycleCount"
+                                  jobTypeEnumId="JOB_REJ_ITEM_COUNT"
+                                  description="Template Service Job to approve cycle counts created for rejected items"
+                                  serviceName="co.hotwax.cycleCount.InventoryCountServices.approve#InventoryCountImport"
+                                  paused="Y">
+        <parameters parameterName="countTypeEnumId" parameterValue="REJ_ITEM_COUNT"/>
+        <parameters parameterName="productStoreId" parameterValue=""/>
+    </moqui.service.job.ServiceJob>
+</entity-facade-xml>

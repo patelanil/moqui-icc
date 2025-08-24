@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://moqui.org/xsd/service-definition-3.xsd">
+    <service verb="autoComplete" noun="SolrFacet" type="oms-rest" location="AutoCompleteSolrFacet" method="post" transaction-timeout="600">
+        <in-parameters>
+            <parameter name="facetToSelect"/>
+            <parameter name="coreName"/>
+            <parameter name="docType"/>
+            <parameter name="searchfield"/>
+            <parameter name="jsonQuery"/>
+            <parameter name="noConditionFind"/>
+            <parameter name="limit"/>
+            <parameter name="q"/>
+            <parameter name="term"/>
+            <parameter name="offset"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="response"/>
+        </out-parameters>
+    </service>
+    <service verb="run" noun="SolrQuery" type="oms-rest" location="solr-query" method="post" transaction-timeout="600">
+        <in-parameters>
+            <parameter name="json" type="Map"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="response" type="Map"/>
+            <parameter name="grouped" type="Map"/>
+        </out-parameters>
+    </service>
+    <service verb="index" noun="SolrDoc" transaction-timeout="600" type="oms-rest" location="service/addDataToSearchIndex" method="post" authenticate="anonymous-all">
+        <description>Service to index data to Solr using HC Solr API.</description>
+        <in-parameters>
+            <parameter name="data" type="List"/>
+            <parameter name="coreName" default-value="enterpriseSearch"/>
+        </in-parameters>
+    </service>
+    <service verb="lookup" noun="Stores" type="oms-rest" location="storeLookup" method="post" authenticate="false">
+        <description>Public api to perform store lookup</description>
+        <in-parameters>
+            <parameter name="documentId"/>
+            <parameter name="viewSize" type="Integer"/>
+            <parameter name="viewIndex" type="Integer"/>
+            <parameter name="filters" type="List"/>
+            <parameter name="fieldsToSelect" type="List"/>
+            <parameter name="queryFields" type="List"/>
+            <parameter name="distance" type="Double"/>
+            <parameter name="documentId"/>
+            <parameter name="point"/>
+            <parameter name="keyword"/>
+            <parameter name="sortBy"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="response" type="Map"/>
+        </out-parameters>
+    </service>
+    <service verb="lookup" noun="PostalCode" type="oms-rest" location="postcodeLookup" method="post" authenticate="false">
+        <description>Public api to perform store lookup</description>
+        <in-parameters>
+            <parameter name="json" type="Map">
+                <parameter name="params" type="Map"/>
+                <parameter name="query"/>
+                <parameter name="filter" type="List"/>
+                <parameter name="fields" type="List"/>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="response" type="Map"/>
+        </out-parameters>
+    </service>
+</services>

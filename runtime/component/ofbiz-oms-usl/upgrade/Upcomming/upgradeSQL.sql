@@ -1,0 +1,1 @@
+delete from service_job_parameter where job_name = "generate_InventoryVarianceFeed" and parameter_name = "productStoreIds"

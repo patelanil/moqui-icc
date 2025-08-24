@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v2.0.0">
+
+    <moqui.service.job.ServiceJob jobName="generate_ReturnsFinancialFeed">
+        <parameters parameterName="statusIds"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- System Message Type for Fulfilled Order Items Feed for ERP  -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ErpFulfilledOrderItemsFeed"
+            description="Generate HotWax Fulfilled Order Items Feed for ERP"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/ErpFulfilledOrderItems/${productStoreId}-ErpFulfilledOrderItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/ErpFulfilledOrderItemsFeed/${productStoreId}-ErpFulfilledOrderItemsFeed-${dateTime}.json"/>
+
+    <!-- Template service job to generate Fulfilled Order Items Feed for ERP -->
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeedForErp"
+            description="Template Service Job to generate the Fulfilled Order Items Feed from HotWax for ERP"
+            serviceName="co.hotwax.ofbiz.OrderServices.generate#FulfilledOrderItemsFeedForErp"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="parentFacilityTypeIds"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="productTypeIds"/>
+        <parameters parameterName="isPhysical"/>
+        <parameters parameterName="orderStatusId"/>
+        <parameters parameterName="customParametersMap"/>
+        <parameters parameterName="orderTypeId"/>
+        <parameters parameterName="includeSalesChannel"/>
+        <parameters parameterName="excludeSalesChannel"/>
+    </moqui.service.job.ServiceJob>
+
+    <!-- System Message Type for Ecommerce Store Fulfilled Order Items Feed for ERP -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ErpEcomStoreFulfilledOrderItemsFeed"
+            description="Generate HotWax Store Fulfilled Order Items Feed for Ecommerce Orders for ERP"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/ErpEcomStoreFulfilledItemsFeed/${productStoreId}-ErpEcomStoreFulfilledItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/ErpEcomStoreFulfilledItemsFeed/${productStoreId}-ErpEcomStoreFulfilledItemsFeed-${dateTime}.json"/>
+
+    <!-- System Message Type for POS Store Fulfilled Order Items Feed for ERP -->
+    <moqui.service.message.SystemMessageType systemMessageTypeId="ErpPosStoreFulfilledOrderItemsFeed"
+            description="Generate HotWax Store Fulfilled Order Items Feed for POS Orders for ERP"
+            parentTypeId="LocalFeedFile"
+            sendPath="/home/${sftpUsername}/hotwax/ErpPosStoreFulfilledItemsFeed/${productStoreId}-ErpPosStoreFulfilledItemsFeed-${systemMessageId}-${dateTime}.json"
+            sendServiceName="co.hotwax.ofbiz.SystemMessageServices.send#SystemMessageFileSftp"
+            receivePath="${contentRoot}/hotwax/ErpPosStoreFulfilledItemsFeed/${productStoreId}-ErpPosStoreFulfilledItemsFeed-${dateTime}.json"/>
+
+    <!-- Template service job to generate Fulfilled Order Items Feed for Shopify -->
+    <moqui.service.job.ServiceJob jobName="generate_FulfilledOrderItemsFeedForShopify"
+            description="Template Service Job to generate the Fulfilled Order Items Feed from HotWax for Shopify"
+            serviceName="co.hotwax.ofbiz.OrderServices.generate#FulfilledOrderItemsFeedForShopify"
+            cronExpression="0 0 0 * * ?" paused="Y">
+        <parameters parameterName="orderId"/>
+        <parameters parameterName="orderItemSeqId"/>
+        <parameters parameterName="systemMessageTypeId"/>
+        <parameters parameterName="systemMessageRemoteId"/>
+        <parameters parameterName="sinceDate"/>
+        <parameters parameterName="parentFacilityTypeIds"/>
+        <parameters parameterName="productStoreIds"/>
+        <parameters parameterName="productTypeIds"/>
+        <parameters parameterName="isPhysical"/>
+        <parameters parameterName="customParametersMap"/>
+        <parameters parameterName="orderTypeId"/>
+    </moqui.service.job.ServiceJob>
+
+</entity-facade-xml>
+

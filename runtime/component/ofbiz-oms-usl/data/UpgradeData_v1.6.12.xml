@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.6.12">
+
+    <artifactGroups artifactGroupId="ADMIN_API" description="Commerce Admin API (via root resource)">
+        <artifacts artifactTypeEnumId="AT_REST_PATH" inheritAuthz="Y" artifactName="/admin"/>
+        <!-- Full permissions for the ADMIN user group -->
+        <authz artifactAuthzId="ADMIN_API" userGroupId="ADMIN" authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL"/>
+    </artifactGroups>
+
+</entity-facade-xml>
+

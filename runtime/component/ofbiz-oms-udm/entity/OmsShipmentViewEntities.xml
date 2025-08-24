@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+
+    <!-- TODO: Discuss the group-by applied on shipmentId, shipmentItemSeqId and productId -->
+    <view-entity entity-name="ShipmentAndItemAndReceipt" package="org.apache.ofbiz.shipment.shipment">
+        <member-entity entity-alias="SITM" entity-name="org.apache.ofbiz.shipment.shipment.ShipmentItem"/>
+        <member-entity entity-alias="SH" entity-name="org.apache.ofbiz.shipment.shipment.Shipment" join-from-alias="SITM">
+            <key-map field-name="shipmentId"/>
+        </member-entity>
+        <member-entity entity-alias="SR" entity-name="org.apache.ofbiz.shipment.receipt.ShipmentReceipt" join-from-alias="SITM" join-optional="true">
+            <key-map field-name="shipmentId"/>
+            <key-map field-name="shipmentItemSeqId"/>
+        </member-entity>
+        <member-entity entity-alias="SIH" entity-name="co.hotwax.integration.shipment.ShipmentItemHistory" join-from-alias="SITM" join-optional="true">
+            <key-map field-name="shipmentId"/>
+            <key-map field-name="shipmentItemSeqId"/>
+        </member-entity>
+        <member-entity entity-alias="OH" entity-name="org.apache.ofbiz.order.order.OrderHeader" join-from-alias="SH" join-optional="true">
+            <key-map field-name="primaryOrderId" related="orderId"/>
+        </member-entity>
+        <alias entity-alias="OH" name="productStoreId"/>
+        <alias entity-alias="SH" name="shipmentTypeId"/>
+        <alias entity-alias="SH" name="statusId"/>
+        <alias entity-alias="SH" name="primaryOrderId"/>
+        <alias entity-alias="SH" name="picklistBinId"/>
+        <alias entity-alias="SH" name="estimatedReadyDate"/>
+        <alias entity-alias="SH" name="estimatedShipDate"/>
+        <alias entity-alias="SH" name="estimatedArrivalDate"/>
+        <alias entity-alias="SH" name="originFacilityId"/>
+        <alias entity-alias="SH" name="destinationFacilityId"/>
+        <alias entity-alias="SH" name="originContactMechId"/>
+        <alias entity-alias="SH" name="destinationContactMechId"/>
+        <alias entity-alias="SH" name="partyIdTo"/>
+        <alias entity-alias="SH" name="partyIdFrom"/>
+        <alias entity-alias="SH" name="externalId"/>
+        <alias entity-alias="SH" name="createdDate"/>
+        <alias entity-alias="SITM" name="shipmentId"/>
+        <alias entity-alias="SITM" name="shipmentItemSeqId"/>
+        <alias entity-alias="SITM" name="productId"/>
+        <alias entity-alias="SITM" name="quantity"/>
+        <alias entity-alias="SITM" name="availableToPromise"/>
+        <alias entity-alias="SITM" name="serialNumber"/>
+        <alias entity-alias="SITM" field="externalId" name="shipmentItemExternalId"/>
+        <alias entity-alias="SR" name="totalQuantityAccepted" field="quantityAccepted" function="sum"/>
+        <alias entity-alias="SR" name="receivedDate" field="datetimeReceived" function="max"/>
+        <alias entity-alias="SR" name="receiptId"/>
+        <entity-condition>
+            <econdition entity-alias="SIH" field-name="shipmentId" operator="equals" value=""/>
+        </entity-condition>
+    </view-entity>
+
+    <view-entity entity-name="PurchaseOrderShipmentReceipt" package="org.apache.ofbiz.shipment.shipment">
+        <member-entity entity-alias="OH" entity-name="org.apache.ofbiz.order.order.OrderHeader"></member-entity>
+        <member-entity entity-alias="OI" entity-name="org.apache.ofbiz.order.order.OrderItem" join-from-alias="OH">
+            <key-map field-name="orderId"/>
+        </member-entity>
+        <member-entity entity-alias="P" entity-name="org.apache.ofbiz.product.product.Product" join-from-alias="OI">
+            <key-map field-name="productId"/>
+        </member-entity>
+        <member-entity entity-alias="SR" entity-name="org.apache.ofbiz.shipment.receipt.ShipmentReceipt" join-from-alias="OI" join-optional="true">
+            <key-map field-name="orderId"/>
+            <key-map field-name="orderItemSeqId"/>
+        </member-entity>
+        <member-entity entity-alias="SH" entity-name="org.apache.ofbiz.shipment.shipment.Shipment" join-from-alias="SR" join-optional="true">
+            <key-map field-name="shipmentId"/>
+        </member-entity>
+        <member-entity entity-alias="SIH" entity-name="co.hotwax.integration.shipment.ShipmentItemHistory" join-from-alias="SR" join-optional="true">
+            <key-map field-name="receiptId"/>
+        </member-entity>
+        <alias entity-alias="OH" name="productStoreId"/>
+        <alias entity-alias="OH" name="orderId"/>
+        <alias entity-alias="OH" name="orderName"/>
+        <alias entity-alias="OH" field="externalId" name="orderExternalId"/>
+        <alias entity-alias="OH" name="orderDate"/>
+        <alias entity-alias="OH" field="statusId" name="orderStatusId"/>
+        <alias entity-alias="OH" name="originFacilityId"/>
+        <alias entity-alias="OI" name="orderItemSeqId"/>
+        <alias entity-alias="OI" field="statusId" name="itemStatusId"/>
+        <alias entity-alias="OI" name="unitPrice"/>
+        <alias entity-alias="OI" field="externalId" name="orderItemExternalId"/>
+        <alias entity-alias="OI" name="productId"/>
+        <alias entity-alias="OI" name="estimatedDeliveryDate"/>
+        <alias entity-alias="OI" name="isNewProduct"/>
+        <alias entity-alias="OI" name="quantity"/>
+        <alias entity-alias="OI" name="availableToPromise"/>
+        <alias entity-alias="P" field="internalName" name="sku"/>
+        <alias entity-alias="SH" field="statusId" name="shipmentStatusId"/>
+        <alias entity-alias="SH" name="shipmentTypeId"/>
+        <alias entity-alias="SR" name="shipmentId"/>
+        <alias entity-alias="SR" name="shipmentItemSeqId"/>
+        <alias entity-alias="SR" name="receiptId"/>
+        <alias entity-alias="SR" name="shipmentPackageSeqId"/>
+        <alias entity-alias="SR" field="datetimeReceived" name="receivedDate" function="max"/>
+        <alias entity-alias="SR" field="quantityAccepted" name="totalQuantityAccepted" function="sum"/>
+        <alias entity-alias="SR" field="quantityRejected" name="totalQuantityRejected" function="sum"/>
+        <entity-condition>
+            <econdition entity-alias="OH" field-name="orderTypeId" value="PURCHASE_ORDER"/>
+            <econdition entity-alias="SIH" field-name="receiptId" operator="equals" value=""/>
+        </entity-condition>
+    </view-entity>
+
+    <view-entity entity-name="ItemIssuanceSummary" package="co.hotwax.shipment">
+        <member-entity entity-alias="II" entity-name="org.apache.ofbiz.shipment.issuance.ItemIssuance"/>
+        <alias-all entity-alias="II">
+            <exclude field="quantity"/>
+            <exclude field="cancelQuantity"/>
+            <exclude field="issuedDateTime"/>
+        </alias-all>
+        <alias name="quantity" entity-alias="II" function="sum"/>
+        <alias name="cancelQuantity" entity-alias="II" function="sum"/>
+        <alias name="issuedDateTime" entity-alias="II" function="max"/>
+    </view-entity>
+
+    <view-entity entity-name="ShipmentReceiptSummary" package="co.hotwax.shipment">
+        <member-entity entity-alias="SR" entity-name="org.apache.ofbiz.shipment.receipt.ShipmentReceipt"/>
+        <alias-all entity-alias="SR">
+            <exclude field="quantityAccepted"/>
+            <exclude field="quantityRejected"/>
+            <exclude field="datetimeReceived"/>
+        </alias-all>
+        <alias name="quantityAccepted" entity-alias="SR" function="sum"/>
+        <alias name="quantityRejected" entity-alias="SR" function="sum"/>
+        <alias name="datetimeReceived" entity-alias="SR" function="max"/>
+    </view-entity>
+</entities>

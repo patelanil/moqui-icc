@@ -1,0 +1,290 @@
+apply plugin: 'groovy'
+
+// sourceCompatibility = 11
+// targetCompatibility = 11
+
+def componentNode = parseComponent(project)
+version = componentNode.'@version'
+
+def moquiDir = projectDir.parentFile.parentFile.parentFile
+def frameworkDir = file(moquiDir.absolutePath + '/framework')
+def jarBaseName = componentNode.'@name'
+
+// to run use "gradle dependencyUpdates"
+apply plugin: 'com.github.ben-manes.versions'
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url "https://plugins.gradle.org/m2/" }
+    }
+    dependencies { classpath 'com.github.ben-manes:gradle-versions-plugin:0.52.0' }
+}
+dependencyUpdates.resolutionStrategy = { componentSelection { rules -> rules.all { ComponentSelection selection ->
+    boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm', 'b'].any { qualifier -> selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-].*/ }
+    if (rejected) selection.reject('Release candidate')
+} } }
+repositories {
+    flatDir name: 'localLib', dirs: frameworkDir.absolutePath + '/lib'
+    mavenCentral()
+}
+
+// Log4J has annotation processors, disable to avoid warning
+tasks.withType(JavaCompile) { options.compilerArgs << "-proc:none" }
+tasks.withType(GroovyCompile) { options.compilerArgs << "-proc:none" }
+
+dependencies {
+    implementation project(':framework')
+    implementation 'com.auth0:java-jwt:4.4.0'
+    runtimeOnly 'com.mysql:mysql-connector-j:8.3.0'
+}
+
+// by default the Java plugin runs test on build, change to not do that (only run test if explicit task)
+// no longer workds as of gradle 4.8 or possibly earlier, use clear() instead: check.dependsOn.remove(test)
+check.dependsOn.clear()
+
+task cleanLib(type: Delete) { delete fileTree(dir: projectDir.absolutePath+'/lib', include: '*') }
+clean.dependsOn cleanLib
+
+jar {
+    destinationDirectory = file(projectDir.absolutePath + '/lib')
+    archiveBaseName = jarBaseName
+}
+tasks.register("omsSetup") {
+    doLast {
+        def patches = [
+                "${projectDir}/patches/JwtToken.patch",
+                "${projectDir}/patches/EntityCrypto.patch"
+        ]
+
+        def copyFiles = [
+                [src: "${projectDir}/conf/jwtKey.txt", dest: "${moquiDir}/runtime/conf/"],
+                [src: "${projectDir}/src/main/groovy/co/hotwax/auth/JWTManager.groovy", dest: "${frameworkDir}/src/main/groovy/co/hotwax/auth"],
+                [src: "${projectDir}/src/main/groovy/co/hotwax/util/OmsEntityCrypto.groovy", dest: "${frameworkDir}/src/main/groovy/co/hotwax/util"],
+                [src: "${projectDir}/shiro.ini", dest: "${frameworkDir}/src/main/resources"],
+                [src: "${projectDir}/src/main/resources/fop.xconf", dest: "${rootDir}/runtime/component/moqui-fop/src/main/resources"]
+        ]
+        File dockerConfigDir = new File(rootDir, "runtime/component/maarg-docker-config")
+        File myaddonsFile = new File(dockerConfigDir, "myaddons.xml")
+
+        if (myaddonsFile.exists()) {
+            copyFiles.add([src: myaddonsFile.absolutePath, dest: rootDir.absolutePath])
+        } else {
+            println("Missing myaddons.xml file. 'maarg-docker-config' component is not present.")
+        }
+
+        // Apply all patches
+        patches.each { patchFile ->
+            println "Applying patch: $patchFile"
+            exec {
+                workingDir rootProject.projectDir
+                commandLine 'patch', '-p0', '-i', patchFile
+            }
+        }
+
+        // Ensure directories exist and copy files
+        copyFiles.each { fileMap ->
+            def destDir = file(fileMap.dest)
+            if (!destDir.exists()) {
+                println "Creating directory: $destDir"
+                destDir.mkdirs()
+            }
+            println "Copying file from ${fileMap.src} to ${fileMap.dest}"
+            copy {
+                from fileMap.src
+                into destDir
+            }
+            //ant.move(file: fileMap.src, todir: destDir)
+            println "Successfully copied file to ${fileMap.dest}"
+        }
+    }
+}
+
+// Task to fetch latest minor, patch, and major version for the current version of each component defined in myaddons.xml file
+tasks.register("checkMyAddonsVersions") {
+    doLast {
+        copy {
+            from "${projectDir}/myaddons.xml"
+            into rootDir
+        }
+        def addonsFile = file("${rootDir}/myaddons.xml")
+        if (!addonsFile.exists()) {
+            println "File myaddons.xml not found!"
+            return
+        }
+
+        def xml = new XmlParser().parse(addonsFile)
+
+        // Parse repository URLs
+        def repositories = [:]
+        xml.repository.each { repo ->
+            def name = repo.@name
+            repo.location.findAll { it.@type?.toString()?.equalsIgnoreCase('git') }.each { location ->
+                def url = location.@url
+                if (name && url) {
+                    repositories[name] = url
+                }
+            }
+        }
+
+        def updatedRequired = []
+        xml.component.each { component ->
+            def name = component.@name
+            def group = component.@group
+            def version = component.@version
+            def repoName = component.@repository ?: "github"
+
+            def repoUrlTemplate = repositories[repoName]
+            def repoUrl = Eval.me('component', component, '"""' + repoUrlTemplate + '"""')
+            println "Fetching latest tags for $name from $repoUrl"
+
+            def tags = "git ls-remote --tags $repoUrl".execute().text.readLines()
+                    .collect { it.split("refs/tags/")[1] }
+                    .findAll { it.matches(/v?\d+\.\d+\.\d+/) }
+                    .collect { it.replaceFirst(/^v/, "") } // Remove leading "v"
+                    .collect { tag ->
+                        def parts = tag.tokenize('.').collect { it.toInteger() }
+                        while (parts.size() < 3) parts.add(0) // Ensure [major, minor, patch]
+                        return [tag, parts[0], parts[1], parts[2]]
+                    }
+                    .sort { a, b ->
+                        def result = a[1] <=> b[1] ?: a[2] <=> b[2] ?: a[3] <=> b[3]
+                        return result
+                    }
+                    .collect { it[0] } // Extract sorted tag names
+
+            if (tags.isEmpty()) {
+                println "No tags found for $name"
+                return
+            }
+
+            def versionParts = version.replaceFirst(/^v/, "").tokenize('.').collect { it.toInteger() }
+            while (versionParts.size() < 3) versionParts.add(0)
+
+            def latestMinorPatchTag = tags.reverse().find {
+                def tagParts = it.tokenize('.').collect { it.toInteger() }
+                while (tagParts.size() < 3) tagParts.add(0)
+                return tagParts[0] == versionParts[0] && tagParts[1] == versionParts[1]
+            } ?: "Not Found"
+
+            def majorVersionPrefix = versionParts[0].toString() + "."
+            //def latestMajorTag = tags.reverse().find { it.startsWith(majorVersionPrefix) } ?: "Not Found"
+            def latestMajorTag = tags.reverse()[0]
+            if (version != latestMinorPatchTag || version != latestMajorTag) {
+                updatedRequired.add(name)
+            }
+
+            println "Component: $name"
+            println "  - My Addons Version: $version"
+            println "  - Latest Minor and Patch Version: $latestMinorPatchTag"
+            println "  - Latest Major Version: $latestMajorTag"
+            println "-------------------------------------------"
+        }
+        println "The following components require version updates:\n ${updatedRequired}"
+    }
+}
+
+tasks.register("copyFonts") {
+    doLast {
+        def destDir = file("${projectDir.absolutePath}/fonts")
+        if(!destDir.exists()) destDir.mkdirs()
+
+        file("${moquiDir.absolutePath}/runtime/component").eachDir {component ->
+            def fontDir = file("${component.absolutePath}/fonts")
+            if(fontDir.exists()) {
+                copy {
+                    from fontDir
+                    into destDir
+                }
+            }
+        }
+    }
+}
+
+gradle.projectsEvaluated {
+    if (project == rootProject) return
+
+    rootProject.tasks.named("gitPullAll") {
+        setActions([])
+        doLast {
+            // framework and runtime
+            if (file("${rootDir}/.git")) { doGitPull(file("${rootDir}/.git")) }
+            if (file("${rootDir}/runtime/.git").exists()) { doGitPull(file("${rootDir}/runtime/.git")) }
+            // all directories under runtime/component
+            for (File compDir in file("${rootDir}/runtime/component").listFiles().findAll { it.isDirectory() && it.listFiles().find { it.name == '.git' } }) {
+                doGitPull(compDir)
+            }
+        }
+    }
+}
+
+def doGitPull(File gitDir) {
+    try {
+        // Resolve current branch
+        def branch = ["git", "rev-parse", "--abbrev-ref", "HEAD"]
+                .execute(null, gitDir)
+                .text.trim()
+
+        // Resolve tracking branch (e.g., origin/main)
+        def trackingBranchProc = ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
+                .execute(null, gitDir)
+        def trackingBranch = trackingBranchProc.text.trim()
+
+        logger.lifecycle("\nPulling ${gitDir} (branch: ${branch}, tracking: ${trackingBranch})")
+
+        // Get HEAD before pull
+        def beforeHead = ["git", "rev-parse", "HEAD"]
+                .execute(null, gitDir)
+                .text.trim()
+
+        // Perform git pull
+        def pullProc = new ProcessBuilder("git", "pull")
+                .directory(gitDir)
+                .redirectErrorStream(true)
+                .start()
+        def pullOutput = pullProc.inputStream.text.trim()
+        pullProc.waitFor()
+
+        logger.lifecycle(pullOutput)
+
+        // Get HEAD after pull
+        def afterHead = ["git", "rev-parse", "HEAD"]
+                .execute(null, gitDir)
+                .text.trim()
+
+        // Compare HEADs
+        if (beforeHead == afterHead) {
+            logger.lifecycle("Already up-to-date.")
+        } else {
+            def cmdList = [
+                    "git", "log", "--pretty=format:- %h by %cn: %s",
+                    "${beforeHead}..${afterHead}"
+            ].collect { it.toString() }
+            String[] cmdArray = cmdList.toArray(new String[0])
+
+            def proc = new ProcessBuilder(cmdArray)
+                    .directory(gitDir)
+                    .redirectErrorStream(true)
+                    .start()
+
+            proc.waitFor()  // wait before reading output
+            def commitLog = proc.inputStream.text.trim()
+
+            if (commitLog) {
+                logger.lifecycle("Pulled commits:")
+                logger.lifecycle(commitLog)
+            } else {
+                logger.lifecycle("Changes pulled, but no new commits in range.")
+            }
+        }
+
+    } catch (Exception e) {
+        logger.error("Git pull failed in ${gitDir}: ${e.message}", e)
+    }
+}
+
+task copyDependencies { doLast {
+    copy { from (configurations.runtimeClasspath - project(':framework').configurations.runtimeClasspath - project(':framework').jar.archivePath)
+        into file(projectDir.absolutePath + '/lib') }
+} }
+copyDependencies.dependsOn cleanLib
+jar.dependsOn copyDependencies

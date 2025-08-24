@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-upgrade-v1.6.7">
+
+    <!-- Template Service Job to generate Inventory Cycle Count Variance Feed from HotWax -->
+    <moqui.service.job.ServiceJob jobName="template_generate_InventoryCycleCountVarianceFeed">
+        <parameters parameterName="inventoryCountItemStatusId"/>
+    </moqui.service.job.ServiceJob>
+</entity-facade-xml>

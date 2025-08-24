@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<entity-facade-xml type="ext-seed">
+    <EnumerationType enumTypeId="DataManagerLog" description="DataManager Log Types"/>
+    <Enumeration enumId="DmltImport" enumTypeId="DataManagerLog" enumCode="Import" description="Import"/>
+    <Enumeration enumId="DmltExport" enumTypeId="DataManagerLog" enumCode="Export" description="Export"/>
+
+    <moqui.basic.StatusType statusTypeId="DataManagerLog" description="Data Manager Log status"/>
+    <moqui.basic.StatusItem statusId="DmlsPending" statusTypeId="DataManagerLog" statusCode="PENDING" description="Pending" statusAge="25"/>
+    <moqui.basic.StatusItem statusId="DmlsQueued" statusTypeId="DataManagerLog" statusCode="QUEUED" description="Queued" statusAge="25"/>
+    <moqui.basic.StatusItem statusId="DmlsRunning" statusTypeId="DataManagerLog" statusCode="RUNNING" description="Running" statusAge="75"/>
+    <moqui.basic.StatusItem statusId="DmlsFinished" statusTypeId="DataManagerLog" statusCode="FINISHED" description="Finished" statusAge="100"/>
+    <moqui.basic.StatusItem statusId="DmlsFailed" statusTypeId="DataManagerLog" statusCode="FAILED" description="Failed" statusAge="101"/>
+    <moqui.basic.StatusItem statusId="DmlsCrashed" statusTypeId="DataManagerLog" statusCode="CRASHED" description="Crashed" statusAge="101"/>
+    <moqui.basic.StatusItem statusId="DmlsCancelled" statusTypeId="DataManagerLog" statusCode="CANCELLED" description="Cancelled" statusAge="101"/>
+
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsPending" toStatusId="DmlsQueued" transitionName="Queue"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsPending" toStatusId="DmlsRunning" transitionName="Running"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsQueued" toStatusId="DmlsRunning" transitionName="Running"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsQueued" toStatusId="DmlsCrashed" transitionName="Crash"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsRunning" toStatusId="DmlsCrashed" transitionName="Crash"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsRunning" toStatusId="DmlsFinished" transitionName="Finish"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsPending" toStatusId="DmlsCancelled" transitionName="Cancel"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsRunning" toStatusId="DmlsCancelled" transitionName="Cancel"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsRunning" toStatusId="DmlsFailed" transitionName="Failed"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsQueued" toStatusId="DmlsFailed" transitionName="Failed"/>
+    <moqui.basic.StatusFlowTransition statusFlowId="Default" statusId="DmlsPending" toStatusId="DmlsFailed" transitionName="Failed"/>
+
+    <moqui.screen.ScreenThemeResource screenThemeId="DEFAULT_QUASAR" sequenceNum="100" resourceTypeEnumId="STRT_HEADER_LOGO"
+                                      resourceValue="/maargstatic/images/hotwax.png"/>
+    <moqui.screen.ScreenThemeResource screenThemeId="DEFAULT_QUASAR" sequenceNum="101" resourceTypeEnumId="STRT_SHORTCUT_ICON"
+                                      resourceValue="/maargstatic/images/favicon.ico"/>
+
+    <moqui.screen.ScreenThemeResource screenThemeId="DEFAULT" sequenceNum="100" resourceTypeEnumId="STRT_HEADER_LOGO"
+                                      resourceValue="/maargstatic/images/hotwax.png"/>
+    <moqui.screen.ScreenThemeResource screenThemeId="DEFAULT" sequenceNum="101" resourceTypeEnumId="STRT_SHORTCUT_ICON"
+                                      resourceValue="/maargstatic/images/favicon.ico"/>
+</entity-facade-xml>
