@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://moqui.org/xsd/rest-api-3.xsd"
+          name="inventory-cycle-count" displayName="Directed Cycle Count REST API" version="${moqui_version}"
+          description="Directed Cycle Count">
+
+    <resource name="login" require-authentication="anonymous-all">
+        <method type="post"><service name="co.hotwax.common.UserServices.login#User"/></method>
+    </resource>
+    <resource name="user">
+        <id name="partyId">
+            <resource name="facilities">
+                <method type="get"><entity name="org.apache.ofbiz.product.facility.FacilityParty" operation="list"/></method>
+            </resource>
+        </id>
+        <resource name="profile">
+            <method type="get"><service name="co.hotwax.common.UserServices.getUserProfile"/></method>
+        </resource>
+    </resource>
+    <resource name="productStores">
+        <id name="productStoreId">
+            <resource name="settings">
+                <method type="get"><entity name="org.apache.ofbiz.product.store.ProductStoreSetting" operation="list"/></method>
+                <method type="post"><entity name="org.apache.ofbiz.product.store.ProductStoreSetting" operation="store"/></method>
+            </resource>
+        </id>
+    </resource>
+    <resource name="facilities" description="Get the facilities">
+        <method type="get"><entity name="co.hotwax.facility.FacilityAndType" operation="list"/></method>
+        <resource name="productStores">
+            <method type="get"><entity name="co.hotwax.product.store.ProductStoreFacilityDetail" operation="list"/></method>
+        </resource>
+    </resource>
+    <resource name="enums" description="Get the enumerations">
+        <method type="get"><entity name="co.hotwax.common.enum.EnumerationAndType" operation="list"/></method>
+    </resource>
+    <resource name="dataManagerMappings">
+        <method type="get"><entity name="co.hotwax.datamanager.DataManagerMapping" operation="list"/></method>
+        <method type="post"><entity name="co.hotwax.datamanager.DataManagerMapping" operation="create"/></method>
+        <id name="mappingPrefId">
+            <method type="get"><entity name="co.hotwax.datamanager.DataManagerMapping" operation="one"/></method>
+            <method type="post"><entity name="co.hotwax.datamanager.DataManagerMapping" operation="store"/></method>
+            <method type="delete"><entity name="co.hotwax.datamanager.DataManagerMapping" operation="delete"/></method>
+        </id>
+    </resource>
+
+    <!-- Inventory Cycle Count API:
+        ** GET /inventory-cycle-count/cycleCounts - get all inventory cycle count import, use filters like status, facility, createdDate
+        ** POST /inventory-cycle-count/cycleCounts - create new inventory cycle count import
+     -->
+    <resource name="cycleCounts">
+        <method type="get"><entity name="co.hotwax.warehouse.InventoryCountImportView" operation="list"/></method>
+        <method type="post"><entity name="co.hotwax.warehouse.InventoryCountImport" operation="create"/></method>
+        <!-- create-rejected-items-cycle-count -->
+        <resource name="rejectedItems">
+            <method type="post">
+                <service name="co.hotwax.cycleCount.InventoryCountServices.findOrCreate#RejectedItemCycleCount"/>
+            </method>
+        </resource>
+        <resource name="bulk">
+            <method type="post">
+                <service name="co.hotwax.cycleCount.InventoryCountServices.create#InventoryCountImports"/>
+            </method>
+        </resource>
+
+        <!-- Inventory Cycle Count API:
+            ** GET /inventory-cycle-count/cycleCounts/items - Get all inventory cycle count items. This is useful for preparing cycle count and detailed CSV file.
+            TODO: Need to prepare a generic endpoint that can return csv data
+        -->
+        <resource name="items">
+            <method type="get"><service name="co.hotwax.cycleCount.InventoryCountServices.get#InventoryCountImportItemDetails"/></method>
+        </resource>
+
+        <!-- Inventory Cycle Count API:
+            ** GET /inventory-cycle-count/cycleCounts/{inventoryCountImportId} - get inventory cycle count import
+            ** PUT /inventory-cycle-count/cycleCounts/{inventoryCountImportId} - update inventory cycle count import
+         -->
+        <id name="inventoryCountImportId">
+            <method type="get"><entity name="co.hotwax.warehouse.InventoryCountImportView" operation="one"/></method>
+            <method type="put"><entity name="co.hotwax.warehouse.InventoryCountImport" operation="update"/></method>
+            <!-- Inventory Cycle Count API:
+                ** GET /inventory-cycle-count/cycleCounts/{inventoryCountImportId}/items - get inventory cycle count items
+            -->
+            <resource name="items">
+                <method type="get"><service name="co.hotwax.cycleCount.InventoryCountServices.get#InventoryCountImportItemDetails"/></method>
+                <resource name="summary">
+                    <method type="get"><entity name="co.hotwax.warehouse.InventoryCountImportItem" operation="list"/></method>
+                </resource>
+                <!-- Inventory Cycle Count API:
+                    ** PUT /inventory-cycle-count/cycleCounts/{inventoryCountImportId}/items/{importItemSeqId} - update inventory cycle count item
+                    ** DELETE /inventory-cycle-count/cycleCounts/{inventoryCountImportId}/items/{importItemSeqId} - delete inventory cycle count item
+                -->
+                <id name="importItemSeqId">
+                    <method type="get"><entity name="co.hotwax.warehouse.InventoryCountImportItem" operation="one"/></method>
+                    <method type="put"><entity name="co.hotwax.warehouse.InventoryCountImportItem" operation="update"/></method>
+                    <method type="delete"><entity name="co.hotwax.warehouse.InventoryCountImportItem" operation="delete"/></method>
+
+                    <resource name="accept">
+                        <method type="post">
+                            <service name="co.hotwax.cycleCount.InventoryCountServices.accept#InventoryCountImportItem"/>
+                        </method>
+                    </resource>
+                </id>
+                <!-- Inventory Cycle Count API:
+                    ** POST /inventory-cycle-count/cycleCounts/{inventoryCountImportId}/items - create new inventory cycle count item
+                    ** POST /inventory-cycle-count/cycleCounts/{inventoryCountImportId}/items/{importItemSeqId} - update inventory cycle count item
+                    ** GET /inventory-cycle-count/cycleCounts/{inventoryCountImportId}/items/count - get inventory cycle count item count
+                -->
+                <resource name="add">
+                    <method type="post"><service name="co.hotwax.cycleCount.InventoryCountServices.add#InventoryCountImportItems"/></method>
+                </resource>
+                <resource name="update">
+                    <method type="post"><service name="co.hotwax.cycleCount.InventoryCountServices.update#InventoryCountImportItems"/></method>
+                </resource>
+                <resource name="recount">
+                    <method type="post"><service name="co.hotwax.cycleCount.InventoryCountServices.recount#InventoryCountImportItems"/></method>
+                </resource>
+                <resource name="count">
+                    <method type="get"><entity name="co.hotwax.warehouse.InventoryCountImportItem" operation="count"/></method>
+                </resource>
+            </resource>
+
+            <resource name="stats">
+                <method type="get"><service name="co.hotwax.cycleCount.InventoryCountServices.get#InventoryCountImport"/></method>
+            </resource>
+        </id>
+        <resource name="bulk">
+            <method type="post">
+                <service name="co.hotwax.cycleCount.InventoryCountServices.create#InventoryCountImports"/>
+            </method>
+        </resource>
+
+        <!-- Inventory Cycle Count API:
+            ** GET /inventory-cycle-count/cycleCounts/items - Get all inventory cycle count items. This is useful for preparing cycle count and detailed CSV file.
+            TODO: Need to prepare a generic endpoint that can return csv data
+        -->
+        <resource name="items">
+            <method type="get"><service name="co.hotwax.cycleCount.InventoryCountServices.get#InventoryCountImportItemDetails"/></method>
+        </resource>
+        <!-- Inventory Cycle Count API:
+            ** GET /inventory-cycle-count/cycleCounts/count - get inventory cycle count import count
+         -->
+        <resource name="count">
+            <method type="get"><entity name="co.hotwax.warehouse.InventoryCountImportView" operation="count"/></method>
+        </resource>
+        <resource name="stats">
+            <method type="post"><service name="co.hotwax.cycleCount.InventoryCountServices.get#InventoryCountImportDetails"/></method>
+        </resource>
+        <resource name="upload">
+            <method type="post"><service name="co.hotwax.cycleCount.InventoryCountServices.upload#InventoryCountImports"/></method>
+        </resource>
+        <resource name="systemMessages">
+            <method type="get"><entity name="moqui.service.message.SystemMessage" operation="list"/></method>
+            <id name="systemMessageId">
+                <method type="post"><entity name="moqui.service.message.SystemMessage" operation="store"/></method>
+                <resource name="downloadFile">
+                    <method type="get"><service name="co.hotwax.cycleCount.InventoryCountServices.get#UploadedCsvFile"/></method>
+                </resource>
+                <resource name="errors">
+                    <method type="get"><entity name="moqui.service.message.SystemMessageError" operation="list"/></method>
+                </resource>
+            </id>
+        </resource>
+    </resource>
+</resource>
